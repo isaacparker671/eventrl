@@ -70,6 +70,7 @@ export async function POST(
       .update({
         status: "APPROVED",
         approved_at: now,
+        decision_at: now,
         rejected_at: null,
         revoked_at: null,
       })

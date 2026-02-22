@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
+import { ensureHostProfile } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type InteractionMode = "RESTRICTED" | "OPEN_CHAT";
@@ -28,6 +29,8 @@ export async function POST(
   const capacityRaw = String(formData.get("capacity") ?? "").trim();
   const allowPlusOne = String(formData.get("allow_plus_one") ?? "") === "on";
   const requiresPayment = String(formData.get("requires_payment") ?? "") === "on";
+  const isPaidEvent = String(formData.get("is_paid_event") ?? "") === "on";
+  const priceDollarsRaw = String(formData.get("price_dollars") ?? "").trim();
   const paymentInstructions = String(formData.get("payment_instructions") ?? "").trim();
   const interactionMode = parseInteractionMode(String(formData.get("interaction_mode") ?? ""));
 
@@ -44,6 +47,29 @@ export async function POST(
     });
   }
 
+  const hostProfile = await ensureHostProfile(hostUser);
+  let priceCents: number | null = null;
+  if (isPaidEvent) {
+    if (!hostProfile.is_pro || !hostProfile.stripe_account_id) {
+      return NextResponse.redirect(
+        new URL(`/host/events/${eventId}/edit?error=pro_and_connected_stripe_required_for_paid_entry`, request.url),
+        { status: 303 },
+      );
+    }
+    if (!priceDollarsRaw) {
+      return NextResponse.redirect(new URL(`/host/events/${eventId}/edit?error=price_required_for_paid_entry`, request.url), {
+        status: 303,
+      });
+    }
+    const parsedPrice = Number(priceDollarsRaw);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      return NextResponse.redirect(new URL(`/host/events/${eventId}/edit?error=invalid_paid_entry_price`, request.url), {
+        status: 303,
+      });
+    }
+    priceCents = Math.round(parsedPrice * 100);
+  }
+
   const supabase = getSupabaseAdminClient();
   const { error } = await supabase
     .from("events")
@@ -54,6 +80,8 @@ export async function POST(
       capacity: parsedCapacity,
       allow_plus_one: allowPlusOne,
       requires_payment: requiresPayment,
+      is_paid_event: isPaidEvent,
+      price_cents: isPaidEvent ? priceCents : null,
       payment_instructions: paymentInstructions || null,
       interaction_mode: interactionMode,
     })

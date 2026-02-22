@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
+import { ensureHostProfile } from "@/lib/host/profile";
 import { randomSlug } from "@/lib/eventrl/security";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -81,18 +82,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const { data: hostProfile } = await supabase
-          .from("host_profiles")
-          .select("display_name")
-          .eq("user_id", hostUser.id)
-          .maybeSingle();
-        const fallbackName = hostUser.email?.split("@")[0] || "Host";
-        if (!hostProfile) {
-          await supabase.from("host_profiles").upsert({
-            user_id: hostUser.id,
-            display_name: fallbackName,
-          });
-        }
+        await ensureHostProfile(hostUser);
 
         await supabase.from("event_chat_members").upsert(
           {

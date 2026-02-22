@@ -20,7 +20,7 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
   const { data: event, error: eventError } = await supabase
     .from("events")
     .select(
-      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, payment_instructions, requires_payment, interaction_mode, invite_slug",
+      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, payment_instructions, requires_payment, is_paid_event, price_cents, interaction_mode, invite_slug",
     )
     .eq("id", id)
     .eq("host_user_id", hostUser.id)
@@ -42,6 +42,8 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
   const stats = {
     totalApproved: guests?.filter((g) => g.status === "APPROVED").length ?? 0,
     pending: guests?.filter((g) => g.status === "PENDING").length ?? 0,
+    pendingPayment: guests?.filter((g) => g.status === "PENDING_PAYMENT").length ?? 0,
+    paidCount: guests?.filter((g) => Boolean(g.payment_confirmed_at)).length ?? 0,
     rejected: guests?.filter((g) => g.status === "REJECTED").length ?? 0,
     left: guests?.filter((g) => g.status === "LEFT").length ?? 0,
     cantMake: guests?.filter((g) => g.status === "CANT_MAKE").length ?? 0,
@@ -52,6 +54,8 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
   };
   const remainingCapacity =
     typeof event.capacity === "number" ? Math.max(event.capacity - stats.checkedIn, 0) : null;
+  const totalCollected =
+    typeof event.price_cents === "number" ? ((event.price_cents * stats.paidCount) / 100).toFixed(2) : null;
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
@@ -105,9 +109,12 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
             <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
               <Stat label="Approved" value={stats.totalApproved} />
               <Stat label="Pending" value={stats.pending} />
+              <Stat label="Pending payment" value={stats.pendingPayment} />
               <Stat label="Rejected" value={stats.rejected} />
               <Stat label="Checked-in" value={stats.checkedIn} />
               <Stat label="Remaining" value={remainingCapacity ?? "∞"} />
+              {event.is_paid_event ? <Stat label="Paid" value={stats.paidCount} /> : null}
+              {event.is_paid_event ? <Stat label="Collected" value={`$${totalCollected ?? "0.00"}`} /> : null}
               <Stat label="Left" value={stats.left} />
               <Stat label="Host Marked Can’t Make" value={stats.cantMake} />
               <Stat label="Guest Said Can’t Make" value={stats.guestReportedCantMake} />

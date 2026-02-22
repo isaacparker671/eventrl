@@ -10,10 +10,13 @@ create table if not exists public.events (
   allow_plus_one boolean not null default false,
   payment_instructions text,
   requires_payment boolean not null default false,
+  is_paid_event boolean not null default false,
+  price_cents integer,
   interaction_mode text not null check (interaction_mode in ('RESTRICTED', 'OPEN_CHAT')),
   invite_slug text not null unique,
   created_at timestamptz not null default now(),
-  constraint capacity_positive check (capacity is null or capacity > 0)
+  constraint capacity_positive check (capacity is null or capacity > 0),
+  constraint price_cents_positive check (price_cents is null or price_cents > 0)
 );
 
 create index if not exists events_host_user_id_idx on public.events(host_user_id);
@@ -37,8 +40,9 @@ create table if not exists public.guest_requests (
   guest_email text,
   recovery_code text,
   plus_one_requested boolean not null default false,
-  status text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE')),
+  status text not null default 'PENDING' check (status in ('PENDING', 'PENDING_PAYMENT', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE')),
   approved_at timestamptz,
+  decision_at timestamptz,
   payment_confirmed_at timestamptz,
   guest_event_status text check (guest_event_status in ('ARRIVING', 'RUNNING_LATE', 'CANT_MAKE')),
   guest_event_status_at timestamptz,
@@ -200,6 +204,9 @@ create table if not exists public.host_profiles (
   zelle_url text,
   google_pay_url text,
   apple_pay_url text,
+  is_pro boolean not null default false,
+  stripe_account_id text,
+  stripe_connected_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

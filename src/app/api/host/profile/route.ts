@@ -1,15 +1,41 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
+import { ensureHostProfile } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 function formString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+export async function GET() {
+  const hostUser = await getCurrentHostUser();
+  if (!hostUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const profile = await ensureHostProfile(hostUser);
+    return NextResponse.json({ profile });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load profile.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   const hostUser = await getCurrentHostUser();
   if (!hostUser) {
     return NextResponse.redirect(new URL("/host/login", request.url), { status: 303 });
+  }
+
+  try {
+    await ensureHostProfile(hostUser);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to bootstrap profile.";
+    return NextResponse.redirect(
+      new URL(`/host/settings?error=${encodeURIComponent(message)}`, request.url),
+      { status: 303 },
+    );
   }
 
   const formData = await request.formData();
@@ -42,4 +68,3 @@ export async function POST(request: Request) {
 
   return NextResponse.redirect(new URL("/host/settings?saved=1", request.url), { status: 303 });
 }
-

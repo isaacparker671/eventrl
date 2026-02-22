@@ -25,6 +25,8 @@ export default async function GuestStatusPage({ searchParams }: GuestStatusPageP
   const statusMessage =
     guest.status === "PENDING"
       ? "Your request is pending host approval."
+      : guest.status === "PENDING_PAYMENT"
+        ? "Complete payment to unlock approval."
       : guest.status === "WAITLIST"
         ? "You are currently on the waitlist."
         : guest.status === "APPROVED"
@@ -111,6 +113,13 @@ export default async function GuestStatusPage({ searchParams }: GuestStatusPageP
             </Link>
             <GuestEventStatusButtons eventId={guest.event.id} currentStatus={guest.guestEventStatus} />
           </div>
+        ) : guest.status === "PENDING_PAYMENT" ? (
+          <Link
+            href={`/api/stripe/checkout?event=${guest.event.id}&guestRequest=${guest.guestRequestId}&slug=${guest.event.invite_slug}`}
+            className="primary-btn mt-5 block w-full py-3 text-center text-sm font-medium"
+          >
+            Pay & Join
+          </Link>
         ) : (
           <Link
             href={`/g/status?event=${guest.event.id}`}

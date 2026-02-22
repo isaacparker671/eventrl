@@ -23,7 +23,9 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         id,
         name,
         starts_at,
-        location_text
+        location_text,
+        is_paid_event,
+        price_cents
       )
       `,
     )
@@ -55,6 +57,11 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         <h1 className="text-xl font-semibold tracking-tight">{event.name}</h1>
         <p className="mt-2 text-sm text-neutral-600">{new Date(event.starts_at).toLocaleString()}</p>
         <p className="text-sm text-neutral-600">{event.location_text}</p>
+        {event.is_paid_event && event.price_cents ? (
+          <p className="mt-1 text-sm text-orange-700">
+            Entry: ${(event.price_cents / 100).toFixed(2)}
+          </p>
+        ) : null}
 
         {existingMembership ? (
           <div className="mt-6 space-y-3">
@@ -96,7 +103,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                 type="submit"
                 className="primary-btn w-full py-3 text-sm font-medium"
               >
-                Request Access
+                {event.is_paid_event ? "Pay & Join" : "Request to Join"}
               </button>
             </form>
 

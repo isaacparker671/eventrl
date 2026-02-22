@@ -9,6 +9,8 @@ alter table if exists public.events
   add column if not exists allow_plus_one boolean not null default false,
   add column if not exists payment_instructions text,
   add column if not exists requires_payment boolean not null default false,
+  add column if not exists is_paid_event boolean not null default false,
+  add column if not exists price_cents integer,
   add column if not exists interaction_mode text,
   add column if not exists invite_slug text,
   add column if not exists created_at timestamptz not null default now();
@@ -52,6 +54,16 @@ $$;
 
 do $$
 begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'price_cents_positive'
+  ) then
+    alter table public.events
+      add constraint price_cents_positive
+      check (price_cents is null or price_cents > 0);
+  end if;
+
   if not exists (
     select 1
     from pg_constraint
@@ -101,8 +113,9 @@ create table if not exists public.guest_requests (
   event_id uuid not null references public.events(id) on delete cascade,
   display_name text not null,
   guest_email text,
-  status text not null default 'PENDING' check (status in ('PENDING', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE')),
+  status text not null default 'PENDING' check (status in ('PENDING', 'PENDING_PAYMENT', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE')),
   approved_at timestamptz,
+  decision_at timestamptz,
   rejected_at timestamptz,
   revoked_at timestamptz,
   created_at timestamptz not null default now()
@@ -116,6 +129,7 @@ alter table if exists public.guest_requests
   add column if not exists plus_one_requested boolean not null default false,
   add column if not exists status text,
   add column if not exists approved_at timestamptz,
+  add column if not exists decision_at timestamptz,
   add column if not exists payment_confirmed_at timestamptz,
   add column if not exists guest_event_status text,
   add column if not exists guest_event_status_at timestamptz,
@@ -139,7 +153,7 @@ begin
 
   alter table public.guest_requests
     add constraint guest_requests_status_check
-    check (status in ('PENDING', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE'));
+    check (status in ('PENDING', 'PENDING_PAYMENT', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE'));
 end
 $$;
 
@@ -473,6 +487,9 @@ create table if not exists public.host_profiles (
   zelle_url text,
   google_pay_url text,
   apple_pay_url text,
+  is_pro boolean not null default false,
+  stripe_account_id text,
+  stripe_connected_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -485,5 +502,8 @@ alter table if exists public.host_profiles
   add column if not exists zelle_url text,
   add column if not exists google_pay_url text,
   add column if not exists apple_pay_url text,
+  add column if not exists is_pro boolean not null default false,
+  add column if not exists stripe_account_id text,
+  add column if not exists stripe_connected_at timestamptz,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();

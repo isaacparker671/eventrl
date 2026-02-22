@@ -9,6 +9,7 @@ const GUEST_MEMBERSHIP_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
 type GuestStatus =
   | "PENDING"
+  | "PENDING_PAYMENT"
   | "APPROVED"
   | "REJECTED"
   | "WAITLIST"
@@ -35,6 +36,8 @@ export type GuestContext = {
     location_text: string;
     payment_instructions: string | null;
     requires_payment: boolean;
+    is_paid_event: boolean;
+    price_cents: number | null;
     allow_plus_one: boolean;
     interaction_mode: "RESTRICTED" | "OPEN_CHAT";
     invite_slug: string;
@@ -148,6 +151,8 @@ async function getGuestContextFromMembership(membership: GuestMembership): Promi
         location_text,
         payment_instructions,
         requires_payment,
+        is_paid_event,
+        price_cents,
         allow_plus_one,
         interaction_mode,
         invite_slug
@@ -189,6 +194,8 @@ async function getGuestContextFromMembership(membership: GuestMembership): Promi
       location_text: event.location_text,
       payment_instructions: event.payment_instructions,
       requires_payment: event.requires_payment,
+      is_paid_event: event.is_paid_event,
+      price_cents: event.price_cents,
       allow_plus_one: event.allow_plus_one,
       interaction_mode: event.interaction_mode,
       invite_slug: event.invite_slug,

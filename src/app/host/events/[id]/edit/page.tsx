@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHost } from "@/lib/auth/requireHost";
+import { ensureHostProfile } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type EditPageProps = {
@@ -10,6 +11,7 @@ type EditPageProps = {
 
 export default async function EditEventPage({ params, searchParams }: EditPageProps) {
   const hostUser = await requireHost();
+  const hostProfile = await ensureHostProfile(hostUser);
   const { id } = await params;
   const query = await searchParams;
   const supabase = getSupabaseAdminClient();
@@ -17,7 +19,7 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
   const { data: event, error } = await supabase
     .from("events")
     .select(
-      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, requires_payment, payment_instructions, interaction_mode",
+      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, requires_payment, payment_instructions, is_paid_event, price_cents, interaction_mode",
     )
     .eq("id", id)
     .eq("host_user_id", hostUser.id)
@@ -28,6 +30,8 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
   }
 
   const startsLocal = new Date(event.starts_at).toISOString().slice(0, 16);
+  const canConfigurePaidEntry = hostProfile.is_pro && Boolean(hostProfile.stripe_account_id);
+  const priceDollars = typeof event.price_cents === "number" ? (event.price_cents / 100).toFixed(2) : "";
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
@@ -60,6 +64,27 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
             <input name="requires_payment" type="checkbox" defaultChecked={event.requires_payment} className="h-4 w-4 accent-orange-600" />
             Require payment before entry
           </label>
+          {canConfigurePaidEntry ? (
+            <>
+              <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <input name="is_paid_event" type="checkbox" defaultChecked={event.is_paid_event} className="h-4 w-4 accent-orange-600" />
+                Paid Entry
+              </label>
+              <input
+                name="price_dollars"
+                type="number"
+                min="1"
+                step="0.01"
+                defaultValue={priceDollars}
+                placeholder="Entry price in USD (e.g. 15.00)"
+                className="input-field text-sm"
+              />
+            </>
+          ) : (
+            <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-xs text-neutral-600">
+              Paid Entry requires Pro and a connected Stripe account.
+            </p>
+          )}
           <textarea
             name="payment_instructions"
             rows={3}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireHost } from "@/lib/auth/requireHost";
+import { ensureHostProfile } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type DashboardProps = {
@@ -10,19 +11,49 @@ export default async function HostDashboardPage({ searchParams }: DashboardProps
   const hostUser = await requireHost();
   const params = await searchParams;
   const supabase = getSupabaseAdminClient();
+  const hostProfile = await ensureHostProfile(hostUser);
 
   const { data: events } = await supabase
     .from("events")
-    .select("id, name, starts_at, location_text, invite_slug")
+    .select("id, name, starts_at, location_text, invite_slug, is_paid_event, price_cents")
     .eq("host_user_id", hostUser.id)
     .order("starts_at", { ascending: true });
 
-  const { data: hostProfile } = await supabase
-    .from("host_profiles")
-    .select("display_name")
-    .eq("user_id", hostUser.id)
-    .maybeSingle();
-  const hostDisplayName = hostProfile?.display_name ?? "Host";
+  const eventIds = (events ?? []).map((event) => event.id);
+  const paidEventPriceById = new Map<string, number>();
+  const paidStatsByEvent = new Map<string, { paidCount: number; totalCollectedCents: number }>();
+  if (eventIds.length) {
+    const { data: paidRows } = await supabase
+      .from("guest_requests")
+      .select("event_id, status, payment_confirmed_at")
+      .in("event_id", eventIds);
+
+    for (const event of events ?? []) {
+      paidStatsByEvent.set(event.id, { paidCount: 0, totalCollectedCents: 0 });
+      if (event.is_paid_event && event.price_cents) {
+        paidEventPriceById.set(event.id, event.price_cents);
+      }
+    }
+
+    for (const row of paidRows ?? []) {
+      if (row.status !== "APPROVED" || !row.payment_confirmed_at) {
+        continue;
+      }
+      const eventPrice = paidEventPriceById.get(row.event_id);
+      if (!eventPrice) {
+        continue;
+      }
+      const current = paidStatsByEvent.get(row.event_id);
+      if (!current) {
+        continue;
+      }
+      current.paidCount += 1;
+      current.totalCollectedCents += eventPrice;
+      paidStatsByEvent.set(row.event_id, current);
+    }
+  }
+
+  const hostDisplayName = hostProfile.display_name || "Host";
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
@@ -121,6 +152,12 @@ export default async function HostDashboardPage({ searchParams }: DashboardProps
                   <p className="mt-1 text-xs text-neutral-500">
                     {new Date(event.starts_at).toLocaleString()} · {event.location_text}
                   </p>
+                  {event.is_paid_event ? (
+                    <p className="mt-1 text-xs text-orange-700">
+                      Paid: {paidStatsByEvent.get(event.id)?.paidCount ?? 0} · Collected: $
+                      {((paidStatsByEvent.get(event.id)?.totalCollectedCents ?? 0) / 100).toFixed(2)}
+                    </p>
+                  ) : null}
                 </Link>
               ))
             ) : (
