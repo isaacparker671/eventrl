@@ -69,6 +69,18 @@ export async function POST(
   }
 
   const supabase = getSupabaseAdminClient();
+  const { data: eventRow } = await supabase
+    .from("events")
+    .select("id, host_user_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!eventRow) {
+    return NextResponse.redirect(new URL("/host/dashboard?error=event_not_found", request.url), { status: 303 });
+  }
+  if (eventRow.host_user_id !== hostUser.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { error } = await supabase
     .from("events")
     .update({
@@ -86,24 +98,13 @@ export async function POST(
       invite_instructions: null,
       interaction_mode: interactionMode,
     })
-    .eq("id", eventId)
-    .eq("host_user_id", hostUser.id);
+    .eq("id", eventId);
 
   if (error) {
     return NextResponse.redirect(
       new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(error.message)}`, request.url),
       { status: 303 },
     );
-  }
-
-  const { data: owned } = await supabase
-    .from("events")
-    .select("id")
-    .eq("id", eventId)
-    .eq("host_user_id", hostUser.id)
-    .maybeSingle();
-  if (!owned) {
-    return NextResponse.redirect(new URL("/host/dashboard?error=event_not_found", request.url), { status: 303 });
   }
 
   return NextResponse.redirect(new URL(`/host/events/${eventId}?saved=1`, request.url), { status: 303 });

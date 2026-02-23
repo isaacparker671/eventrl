@@ -11,7 +11,7 @@ export async function GET(
   if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const supabase = getSupabaseAdminClient();
-  const [{ data: polls }, { data: votes }] = await Promise.all([
+  const [{ data: polls }, { data: voteRows }] = await Promise.all([
     supabase
       .from("event_polls")
       .select("id, question, created_at, closed_at")
@@ -20,14 +20,22 @@ export async function GET(
       .limit(20),
     supabase
       .from("event_poll_votes")
-      .select("poll_id, vote, guest_request_id")
+      .select("poll_id, vote")
       .eq("event_id", eventId),
   ]);
 
+  const myVotes = actor.type === "GUEST"
+    ? await supabase
+        .from("event_poll_votes")
+        .select("poll_id, vote")
+        .eq("event_id", eventId)
+        .eq("guest_request_id", actor.guestRequestId)
+    : { data: [] as { poll_id: string; vote: "YES" | "NO" }[] };
+
   return NextResponse.json({
     polls: polls ?? [],
-    votes: votes ?? [],
-    actorGuestRequestId: actor.type === "GUEST" ? actor.guestRequestId : null,
+    voteCounts: voteRows ?? [],
+    myVotes: myVotes.data ?? [],
   });
 }
 
@@ -64,4 +72,3 @@ export async function POST(
 
   return NextResponse.json({ ok: true });
 }
-

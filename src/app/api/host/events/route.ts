@@ -116,13 +116,6 @@ export async function POST(request: Request) {
           },
           { onConflict: "event_id,host_user_id" },
         );
-
-        await supabase.from("event_chat_messages").insert({
-          event_id: data.id,
-          sender_type: "SYSTEM",
-          sender_name: "Eventrl",
-          body: "Group chat is live.",
-        });
       }
       return NextResponse.redirect(new URL("/host/dashboard", request.url), { status: 303 });
     }

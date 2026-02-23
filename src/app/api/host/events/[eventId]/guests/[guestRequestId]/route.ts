@@ -44,15 +44,17 @@ export async function POST(
 
   const supabase = getSupabaseAdminClient();
 
-  const { data: event, error: eventError } = await supabase
+  const { data: eventRow, error: eventError } = await supabase
     .from("events")
-    .select("id")
+    .select("id, host_user_id")
     .eq("id", eventId)
-    .eq("host_user_id", hostUser.id)
-    .single();
+    .maybeSingle();
 
-  if (eventError || !event) {
-    return NextResponse.redirect(new URL("/host/dashboard", request.url), { status: 303 });
+  if (eventError || !eventRow) {
+    return NextResponse.redirect(new URL("/host/dashboard?error=event_not_found", request.url), { status: 303 });
+  }
+  if (eventRow.host_user_id !== hostUser.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const now = new Date().toISOString();

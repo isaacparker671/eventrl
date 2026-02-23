@@ -17,6 +17,8 @@ export default function HostLoginPage() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const isBusy = loading;
 
+  const normalizedEmail = email.trim().toLowerCase();
+
   const submitLabel = loading
     ? mode === "login"
       ? "Signing in..."
@@ -39,10 +41,22 @@ export default function HostLoginPage() {
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password });
 
         if (error) {
-          setErrorMessage(error.message);
+          const msg = error.message.toLowerCase();
+          if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+            setErrorMessage("This email already has an account. Switch to Login or reset password below.");
+          } else {
+            setErrorMessage(error.message);
+          }
+          return;
+        }
+
+        const existingAccountHiddenBySupabase =
+          !!data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+        if (existingAccountHiddenBySupabase) {
+          setErrorMessage("This email already has an account. Switch to Login or reset password below.");
           return;
         }
 
@@ -51,14 +65,14 @@ export default function HostLoginPage() {
           return;
         }
 
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
         if (!signInError) {
           window.location.assign("/host/dashboard");
           return;
         }
 
         if (signInError.message.toLowerCase().includes("confirm")) {
-          setErrorMessage("Turn off Supabase email confirmation to auto-sign in after signup.");
+          setInfoMessage("Check your email and confirm your account, then log in.");
           return;
         }
 
@@ -66,16 +80,43 @@ export default function HostLoginPage() {
         return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
 
       if (error) {
-        setErrorMessage(error.message);
+        if (error.message.toLowerCase().includes("invalid")) {
+          setErrorMessage("Invalid email or password. If you signed up recently, confirm your email first.");
+        } else {
+          setErrorMessage(error.message);
+        }
         return;
       }
 
       window.location.assign("/host/dashboard");
     } catch {
       setErrorMessage("Authentication failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setErrorMessage(null);
+    setInfoMessage(null);
+    if (!normalizedEmail) {
+      setErrorMessage("Enter your email first, then tap Reset Password.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+        redirectTo: `${window.location.origin}/host/login`,
+      });
+      if (error) {
+        setErrorMessage(error.message);
+        return;
+      }
+      setInfoMessage("Password reset email sent. Check your inbox.");
     } finally {
       setLoading(false);
     }
@@ -173,6 +214,14 @@ export default function HostLoginPage() {
               disabled={isBusy}
             >
               {submitLabel}
+            </button>
+            <button
+              type="button"
+              className="secondary-btn w-full py-3 text-sm font-medium"
+              onClick={handleResetPassword}
+              disabled={isBusy}
+            >
+              Reset Password
             </button>
           </form>
 

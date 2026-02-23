@@ -5,6 +5,7 @@ import { getGuestContextFromCookie } from "@/lib/eventrl/guestSession";
 import { randomToken, sha256Hex } from "@/lib/eventrl/security";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import GuestEventStatusButtons from "./GuestEventStatusButtons";
+import EventImageGallery from "@/components/event/EventImageGallery";
 
 type GuestStatusPageProps = {
   searchParams: Promise<{ event?: string }>;
@@ -166,6 +167,14 @@ export default async function GuestStatusPage({ searchParams }: GuestStatusPageP
     { label: "Google Pay", url: guest.event.host?.google_pay_url },
     { label: "Apple Pay", url: guest.event.host?.apple_pay_url },
   ].filter((link) => Boolean(link.url));
+  const supabase = getSupabaseAdminClient();
+  const { data: eventImages } = await supabase
+    .from("event_images")
+    .select("id, public_url, is_cover")
+    .eq("event_id", guest.event.id)
+    .order("is_cover", { ascending: false })
+    .order("order_index", { ascending: true })
+    .order("created_at", { ascending: true });
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
@@ -175,6 +184,20 @@ export default async function GuestStatusPage({ searchParams }: GuestStatusPageP
         <p className="mt-1 text-sm text-neutral-600">{guest.displayName}</p>
         <p className="mt-1 text-sm text-neutral-600">{new Date(guest.event.starts_at).toLocaleString()}</p>
         <p className="text-sm text-neutral-600">{guest.event.location_text}</p>
+        {guest.event.payment_instructions ? (
+          <div className="mt-2 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-600">Description</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-700">{guest.event.payment_instructions}</p>
+          </div>
+        ) : null}
+        <EventImageGallery
+          images={(eventImages ?? []).map((image) => ({
+            id: image.id,
+            publicUrl: image.public_url,
+            isCover: image.is_cover,
+          }))}
+          title={guest.event.name}
+        />
 
         <div className="mt-5 rounded-xl border border-neutral-200 bg-white/90 px-3 py-3">
           <p className="text-xs text-neutral-500">Status</p>
@@ -185,12 +208,6 @@ export default async function GuestStatusPage({ searchParams }: GuestStatusPageP
         {guest.status === "APPROVED" && guest.event.requires_payment ? (
           <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50/80 px-3 py-3">
             <p className="text-xs text-orange-700">Hosted by {guest.event.host?.display_name ?? "Host"}.</p>
-            {guest.event.payment_instructions ? (
-              <div className="mt-2 rounded-lg border border-orange-200 bg-white/80 px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">Description</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-orange-800">{guest.event.payment_instructions}</p>
-              </div>
-            ) : null}
             {paymentLinks.length ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 {paymentLinks.map((link) => (

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { addGuestMembershipToResponse } from "@/lib/eventrl/guestSession";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 function randomRecoveryCode() {
@@ -12,6 +13,18 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
+  const ip = getClientIp(request);
+  const rate = checkRateLimit({
+    key: `guest:join:${slug}:${ip}`,
+    limit: 12,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many join attempts. Try again in a moment." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
+
   const formData = await request.formData();
   const displayName = String(formData.get("display_name") ?? "").trim();
   const guestEmail = String(formData.get("guest_email") ?? "").trim();
@@ -90,5 +103,6 @@ export async function POST(
     });
   }
 
+  applyRateLimitHeaders(response, rate);
   return response;
 }

@@ -21,7 +21,6 @@ type Poll = {
 type PollVote = {
   poll_id: string;
   vote: "YES" | "NO";
-  guest_request_id: string;
 };
 
 type Reaction = {
@@ -70,13 +69,14 @@ export default function EventChat({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joinNotice, setJoinNotice] = useState<string | null>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
-  const [pollVotes, setPollVotes] = useState<PollVote[]>([]);
+  const [pollVoteCounts, setPollVoteCounts] = useState<PollVote[]>([]);
+  const [pollMyVotes, setPollMyVotes] = useState<PollVote[]>([]);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const [questionRequest, setQuestionRequest] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<PendingQuestion[]>([]);
   const [interactionMode, setInteractionMode] = useState<"RESTRICTED" | "OPEN_CHAT">("OPEN_CHAT");
-  const [actorGuestRequestId, setActorGuestRequestId] = useState<string | null>(null);
   const [actorReactionByMessage, setActorReactionByMessage] = useState<Record<string, Reaction["reaction"]>>({});
   const [replyToMessage, setReplyToMessage] = useState<ChatMessage | null>(null);
   const [actionMessageId, setActionMessageId] = useState<string | null>(null);
@@ -85,9 +85,11 @@ export default function EventChat({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const actorReactionByMessageRef = useRef<Record<string, Reaction["reaction"]>>({});
   const pendingReactionMessageIdsRef = useRef<Set<string>>(new Set());
+  const latestJoinNoticeIdRef = useRef<string | null>(null);
   const isNearBottomRef = useRef(true);
   const lastFeedCountRef = useRef(0);
   const longPressTimeoutRef = useRef<number | null>(null);
+  const joinNoticeTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     actorReactionByMessageRef.current = actorReactionByMessage;
@@ -114,9 +116,30 @@ export default function EventChat({
       return;
     }
 
-    const nextMessages = (payload.messages ?? []).filter(
-      (message) => !(message.sender_type === "SYSTEM" && message.body.startsWith("New poll:")),
+    const joinSystemMessages = (payload.messages ?? []).filter(
+      (message) =>
+        message.sender_type === "SYSTEM" &&
+        (message.body.includes("joined the chat") || message.body.includes("paid and was approved")),
     );
+    const newestJoinSystemMessage = joinSystemMessages[joinSystemMessages.length - 1];
+    if (newestJoinSystemMessage && newestJoinSystemMessage.id !== latestJoinNoticeIdRef.current) {
+      latestJoinNoticeIdRef.current = newestJoinSystemMessage.id;
+      setJoinNotice(newestJoinSystemMessage.body);
+      if (joinNoticeTimeoutRef.current) {
+        window.clearTimeout(joinNoticeTimeoutRef.current);
+      }
+      joinNoticeTimeoutRef.current = window.setTimeout(() => {
+        setJoinNotice(null);
+      }, 2600);
+    }
+
+    const nextMessages = (payload.messages ?? []).filter((message) => {
+      if (message.sender_type !== "SYSTEM") return true;
+      if (message.body.startsWith("New poll:")) return false;
+      if (message.body.includes("joined the chat")) return false;
+      if (message.body.includes("paid and was approved")) return false;
+      return true;
+    });
     setMessages((previous) => (sameMessages(previous, nextMessages) ? previous : nextMessages));
 
     const pendingMessages = pendingReactionMessageIdsRef.current;
@@ -159,12 +182,12 @@ export default function EventChat({
       headers: { "x-eventrl-actor": actor },
     });
     const payload = (await response.json().catch(() => null)) as
-      | { polls?: Poll[]; votes?: PollVote[]; actorGuestRequestId?: string | null }
+      | { polls?: Poll[]; voteCounts?: PollVote[]; myVotes?: PollVote[] }
       | null;
     if (!response.ok || !payload) return;
     setPolls(payload.polls ?? []);
-    setPollVotes(payload.votes ?? []);
-    setActorGuestRequestId(payload.actorGuestRequestId ?? null);
+    setPollVoteCounts(payload.voteCounts ?? []);
+    setPollMyVotes(payload.myVotes ?? []);
   }, [actor, eventId]);
 
   const fetchPendingQuestions = useCallback(async () => {
@@ -200,6 +223,9 @@ export default function EventChat({
       window.clearInterval(interval);
       if (longPressTimeoutRef.current) {
         window.clearTimeout(longPressTimeoutRef.current);
+      }
+      if (joinNoticeTimeoutRef.current) {
+        window.clearTimeout(joinNoticeTimeoutRef.current);
       }
     };
   }, [fetchMessages, fetchPendingQuestions, fetchPolls]);
@@ -405,13 +431,10 @@ export default function EventChat({
     reactionCounts[messageId]?.[reaction] ?? 0;
 
   const pollCount = (pollId: string, vote: "YES" | "NO") =>
-    pollVotes.filter((entry) => entry.poll_id === pollId && entry.vote === vote).length;
+    pollVoteCounts.filter((entry) => entry.poll_id === pollId && entry.vote === vote).length;
 
   const hasVoted = (pollId: string) =>
-    Boolean(
-      actorGuestRequestId &&
-        pollVotes.some((vote) => vote.poll_id === pollId && vote.guest_request_id === actorGuestRequestId),
-    );
+    pollMyVotes.some((vote) => vote.poll_id === pollId);
 
   const myReaction = (messageId: string) => actorReactionByMessage[messageId];
   const reactionButtonClass = (messageId: string, reaction: "UP" | "DOWN" | "LAUGH") =>
@@ -459,6 +482,11 @@ export default function EventChat({
           LIVE CHAT
         </span>
       </div>
+      {joinNotice ? (
+        <p className="mb-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-700">
+          {joinNotice}
+        </p>
+      ) : null}
 
       <div
         ref={containerRef}

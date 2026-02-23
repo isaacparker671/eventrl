@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuestMembershipForEvent } from "@/lib/eventrl/guestSession";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import EventImageGallery from "@/components/event/EventImageGallery";
 
 type InvitePageProps = {
   params: Promise<{ slug: string }>;
@@ -24,6 +25,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         name,
         starts_at,
         location_text,
+        payment_instructions,
         is_paid_event,
         price_cents
       )
@@ -37,6 +39,13 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   }
   const event = Array.isArray(invite.events) ? invite.events[0] : invite.events;
   if (!event) notFound();
+  const { data: eventImages } = await supabase
+    .from("event_images")
+    .select("id, public_url, is_cover")
+    .eq("event_id", event.id)
+    .order("is_cover", { ascending: false })
+    .order("order_index", { ascending: true })
+    .order("created_at", { ascending: true });
 
   const existingMembership = await getGuestMembershipForEvent(event.id);
   const errorMessage =
@@ -58,6 +67,20 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         <h1 className="text-xl font-semibold tracking-tight">{event.name}</h1>
         <p className="mt-2 text-sm text-neutral-600">{new Date(event.starts_at).toLocaleString()}</p>
         <p className="text-sm text-neutral-600">{event.location_text}</p>
+        {event.payment_instructions ? (
+          <div className="mt-2 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-600">Description</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-700">{event.payment_instructions}</p>
+          </div>
+        ) : null}
+        <EventImageGallery
+          images={(eventImages ?? []).map((image) => ({
+            id: image.id,
+            publicUrl: image.public_url,
+            isCover: image.is_cover,
+          }))}
+          title={event.name}
+        />
         {event.is_paid_event && event.price_cents ? (
           <p className="mt-1 text-sm text-orange-700">
             Entry: ${(event.price_cents / 100).toFixed(2)}
@@ -134,19 +157,6 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
           Already requested? Open My Events
         </Link>
 
-        <div className="mt-4 flex items-center justify-center gap-3 text-xs text-neutral-500">
-          <Link href="/terms" className="underline-offset-2 hover:underline">
-            Terms
-          </Link>
-          <span aria-hidden>•</span>
-          <Link href="/privacy" className="underline-offset-2 hover:underline">
-            Privacy
-          </Link>
-          <span aria-hidden>•</span>
-          <Link href="/refunds" className="underline-offset-2 hover:underline">
-            Refunds
-          </Link>
-        </div>
       </div>
     </main>
   );

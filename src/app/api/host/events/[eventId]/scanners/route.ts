@@ -43,12 +43,14 @@ export async function POST(
   const supabase = getSupabaseAdminClient();
   const { data: event } = await supabase
     .from("events")
-    .select("id")
+    .select("id, host_user_id")
     .eq("id", eventId)
-    .eq("host_user_id", hostUser.id)
     .maybeSingle();
   if (!event) {
     return NextResponse.redirect(new URL("/host/dashboard?error=event_not_found", request.url), { status: 303 });
+  }
+  if (event.host_user_id !== hostUser.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { error } = await supabase.from("event_scanner_roles").upsert(
@@ -112,12 +114,14 @@ export async function DELETE(
   const supabase = getSupabaseAdminClient();
   const { data: event } = await supabase
     .from("events")
-    .select("id")
+    .select("id, host_user_id")
     .eq("id", eventId)
-    .eq("host_user_id", hostUser.id)
     .maybeSingle();
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  }
+  if (event.host_user_id !== hostUser.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { error } = await supabase

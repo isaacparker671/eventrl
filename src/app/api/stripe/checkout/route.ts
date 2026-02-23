@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
   const { data: hostProfile } = await supabase
     .from("host_profiles")
-    .select("subscription_status, stripe_account_id")
+    .select("subscription_status, is_pro, stripe_account_id")
     .eq("user_id", event.host_user_id)
     .maybeSingle();
 

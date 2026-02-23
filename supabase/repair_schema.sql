@@ -602,6 +602,68 @@ alter table if exists public.host_profiles
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
+create table if not exists public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  message text not null,
+  user_id uuid references auth.users(id) on delete set null,
+  user_agent text,
+  ip text,
+  created_at timestamptz not null default now()
+);
+
+alter table if exists public.support_tickets
+  add column if not exists name text,
+  add column if not exists email text,
+  add column if not exists message text,
+  add column if not exists user_id uuid references auth.users(id) on delete set null,
+  add column if not exists user_agent text,
+  add column if not exists ip text,
+  add column if not exists created_at timestamptz not null default now();
+
+create index if not exists support_tickets_created_at_idx
+  on public.support_tickets(created_at desc);
+
+create index if not exists support_tickets_user_id_idx
+  on public.support_tickets(user_id);
+
+create table if not exists public.stripe_events (
+  id text primary key,
+  created_at timestamptz not null default now()
+);
+
+alter table if exists public.stripe_events
+  add column if not exists created_at timestamptz not null default now();
+
+create index if not exists stripe_events_created_at_idx
+  on public.stripe_events(created_at desc);
+
+create table if not exists public.event_images (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  storage_path text not null unique,
+  public_url text not null,
+  order_index integer not null default 0,
+  is_cover boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table if exists public.event_images
+  add column if not exists event_id uuid references public.events(id) on delete cascade,
+  add column if not exists storage_path text,
+  add column if not exists public_url text,
+  add column if not exists order_index integer not null default 0,
+  add column if not exists is_cover boolean not null default false,
+  add column if not exists created_at timestamptz not null default now();
+
+create index if not exists event_images_event_id_idx
+  on public.event_images(event_id, is_cover desc, order_index asc, created_at asc);
+
+create unique index if not exists event_images_cover_per_event_uniq
+  on public.event_images(event_id)
+  where is_cover = true;
+
 update public.host_profiles
 set is_pro = case
   when subscription_status in ('active', 'trialing') then true

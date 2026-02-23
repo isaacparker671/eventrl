@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { requireEventAccess } from "@/lib/auth/eventAccess";
 import { hasProAccess } from "@/lib/host/profile";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { sha256Hex } from "@/lib/eventrl/security";
 
@@ -12,7 +13,8 @@ type CheckinResult =
   | "NOT_APPROVED"
   | "NOT_PAID"
   | "INVALID_TOKEN"
-  | "UNAUTHORIZED";
+  | "UNAUTHORIZED"
+  | "RATE_LIMITED";
 
 function jsonResult(status: number, result: CheckinResult, message: string, extra: Record<string, unknown> = {}) {
   return NextResponse.json({ result, message, ...extra }, { status });
@@ -32,6 +34,19 @@ export async function POST(
   if (!accessRole) {
     return jsonResult(403, "UNAUTHORIZED", "Not allowed for this event.");
   }
+
+  const ip = getClientIp(request);
+  const rate = checkRateLimit({
+    key: `checkin:${eventId}:${hostUser.id}:${ip}`,
+    limit: 180,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = jsonResult(429, "RATE_LIMITED", "Too many scans. Slow down.");
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
+
   const body = (await request.json().catch(() => null)) as { token?: string } | null;
   const rawToken = body?.token?.trim();
 
@@ -143,10 +158,12 @@ export async function POST(
   const remainingCapacity =
     typeof event.capacity === "number" ? Math.max(event.capacity - checkedIn, 0) : null;
 
-  return jsonResult(200, result, message, {
+  const response = jsonResult(200, result, message, {
     checkedIn,
     approved,
     remainingCapacity,
     guestName: guestRequest.display_name,
   });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }

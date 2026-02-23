@@ -42,6 +42,14 @@ export default async function HostSettingsPage({ searchParams }: SettingsProps) 
           {proEnabled ? <p className="mt-2 text-sm text-green-700">Pro is active.</p> : null}
           {proCanceled ? <p className="mt-2 text-sm text-neutral-600">Pro checkout canceled.</p> : null}
           {errorMessage ? <p className="mt-2 text-sm text-red-600">{errorMessage}</p> : null}
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Link href="/host/billing" className="secondary-btn justify-center">
+              Billing
+            </Link>
+            <Link href="/support?returnTo=%2Fhost%2Fsettings" className="secondary-btn justify-center">
+              Contact Support
+            </Link>
+          </div>
         </div>
 
         <section className="glass-card rounded-2xl p-5">

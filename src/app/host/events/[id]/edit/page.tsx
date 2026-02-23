@@ -6,7 +6,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type EditPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
 };
 
 export default async function EditEventPage({ params, searchParams }: EditPageProps) {
@@ -28,6 +28,13 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
   if (error || !event || event.host_user_id !== hostUser.id) {
     notFound();
   }
+  const { data: eventImages } = await supabase
+    .from("event_images")
+    .select("id, public_url, is_cover, order_index, created_at")
+    .eq("event_id", id)
+    .order("is_cover", { ascending: false })
+    .order("order_index", { ascending: true })
+    .order("created_at", { ascending: true });
 
   const startsLocal = new Date(event.starts_at).toISOString().slice(0, 16);
   const proAccess = hasProAccess(hostProfile);
@@ -43,6 +50,7 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
             Back to Event
           </Link>
           <h1 className="mt-2 text-xl font-semibold">Edit Event</h1>
+          {query.saved ? <p className="mt-2 text-sm text-green-700">Saved.</p> : null}
           {query.error ? <p className="mt-2 text-sm text-red-600">{query.error}</p> : null}
         </div>
 
@@ -114,6 +122,66 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
             Save Event
           </button>
         </form>
+
+        <section className="glass-card rounded-2xl p-5 space-y-3">
+          <h2 className="text-base font-semibold">Event Images</h2>
+          {proAccess ? (
+            <>
+              <p className="text-xs text-neutral-500">Upload 1-3 images. First image is cover by default.</p>
+              <form method="post" action={`/api/host/events/${id}/images`} encType="multipart/form-data" className="space-y-2">
+                <input type="hidden" name="action" value="upload" />
+                <input name="image" type="file" accept="image/*" className="input-field text-sm" />
+                <button
+                  type="submit"
+                  className="primary-btn w-full py-2.5 text-sm font-medium"
+                  disabled={(eventImages?.length ?? 0) >= 3}
+                >
+                  {(eventImages?.length ?? 0) >= 3 ? "Max 3 images reached" : "Upload Image"}
+                </button>
+              </form>
+
+              {eventImages?.length ? (
+                <div className="space-y-2">
+                  {eventImages.map((image, index) => (
+                    <div key={image.id} className="rounded-xl border border-neutral-200 bg-white/90 p-2">
+                      <img src={image.public_url} alt={`Event image ${index + 1}`} className="h-36 w-full rounded-lg object-cover" />
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <form method="post" action={`/api/host/events/${id}/images`}>
+                          <input type="hidden" name="action" value="set_cover" />
+                          <input type="hidden" name="image_id" value={image.id} />
+                          <button
+                            type="submit"
+                            className={image.is_cover ? "primary-btn w-full py-2 text-xs font-medium" : "secondary-btn w-full py-2 text-xs font-medium"}
+                            disabled={image.is_cover}
+                          >
+                            {image.is_cover ? "Cover Image" : "Set as Cover"}
+                          </button>
+                        </form>
+                        <form method="post" action={`/api/host/events/${id}/images`}>
+                          <input type="hidden" name="action" value="delete" />
+                          <input type="hidden" name="image_id" value={image.id} />
+                          <button type="submit" className="secondary-btn w-full py-2 text-xs font-medium">
+                            Remove
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500">No images uploaded yet.</p>
+              )}
+            </>
+          ) : (
+            <div className="rounded-xl border border-neutral-200 bg-white/90 px-3 py-3">
+              <p className="text-sm font-medium">Locked</p>
+              <p className="mt-1 text-xs text-neutral-500">Upgrade to Pro to upload event images (cover + gallery).</p>
+              <Link href="/host/settings" className="secondary-btn mt-2 inline-flex">
+                Upgrade in Settings
+              </Link>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );

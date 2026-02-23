@@ -5,6 +5,7 @@ import { hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type StripeEvent = {
+  id?: string;
   type?: string;
   account?: string;
   data?: {
@@ -241,7 +242,7 @@ async function handleGuestCheckoutCompleted(event: StripeEvent, obj: Record<stri
 
   const { data: hostProfile } = await supabase
     .from("host_profiles")
-    .select("subscription_status, stripe_account_id")
+    .select("subscription_status, is_pro, stripe_account_id")
     .eq("user_id", eventRow.host_user_id)
     .maybeSingle();
 
@@ -375,9 +376,25 @@ async function handleSubscriptionUpdated(obj: Record<string, unknown>, deleted: 
   });
 }
 
+async function recordStripeEvent(eventId: string) {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("stripe_events").insert({ id: eventId });
+
+  if (!error) {
+    return { duplicate: false };
+  }
+
+  if (error.code === "23505") {
+    return { duplicate: true };
+  }
+
+  throw new Error(`Failed to persist stripe event idempotency key: ${error.message}`);
+}
+
 export async function POST(request: Request) {
   const signatureHeader = request.headers.get("stripe-signature");
   if (!signatureHeader) {
+    console.error("[stripe-webhook] Missing stripe-signature header.");
     return NextResponse.json({ error: "Missing Stripe signature." }, { status: 400 });
   }
 
@@ -385,6 +402,7 @@ export async function POST(request: Request) {
   try {
     payload = await request.text();
   } catch {
+    console.error("[stripe-webhook] Failed to read raw request body.");
     return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
   }
 
@@ -393,10 +411,12 @@ export async function POST(request: Request) {
     webhookSecret = getRequiredEnv("STRIPE_WEBHOOK_SECRET");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webhook misconfigured.";
+    console.error("[stripe-webhook] Missing webhook configuration.", { message });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 
   if (!verifyStripeSignature(payload, signatureHeader, webhookSecret)) {
+    console.error("[stripe-webhook] Invalid Stripe signature.");
     return NextResponse.json({ error: "Invalid Stripe signature." }, { status: 400 });
   }
 
@@ -404,7 +424,30 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(payload) as StripeEvent;
   } catch {
+    console.error("[stripe-webhook] Invalid JSON payload after signature verification.");
     return NextResponse.json({ error: "Invalid webhook JSON." }, { status: 400 });
+  }
+
+  const eventId = getString(event.id);
+  const eventType = getString(event.type);
+  if (!eventId) {
+    console.error("[stripe-webhook] Missing event id.", { eventType });
+    return NextResponse.json({ error: "Invalid Stripe event id." }, { status: 400 });
+  }
+
+  try {
+    const idempotency = await recordStripeEvent(eventId);
+    if (idempotency.duplicate) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to persist webhook event id.";
+    console.error("[stripe-webhook] Idempotency persistence failed.", {
+      eventId,
+      eventType,
+      message,
+    });
+    return NextResponse.json({ error: "Webhook idempotency error." }, { status: 500 });
   }
 
   const obj = event.data?.object;
@@ -444,6 +487,11 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Webhook processing failed.";
+    console.error("[stripe-webhook] Processing failed.", {
+      eventId,
+      eventType,
+      message,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 

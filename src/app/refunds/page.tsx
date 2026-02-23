@@ -1,11 +1,25 @@
 import Link from "next/link";
 
-export default function RefundsPage() {
+type RefundsPageProps = {
+  searchParams: Promise<{ returnTo?: string }>;
+};
+
+function safeReturnTo(value: string | undefined) {
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
+  return value;
+}
+
+export default async function RefundsPage({ searchParams }: RefundsPageProps) {
+  const query = await searchParams;
+  const returnTo = safeReturnTo(query.returnTo);
+
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
       <div className="mx-auto w-full max-w-3xl space-y-4">
         <section className="glass-card rounded-2xl p-5">
-          <Link href="/" className="link-btn">
+          <Link href={returnTo} className="link-btn">
             Back
           </Link>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">Refund &amp; Billing Policy</h1>

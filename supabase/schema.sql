@@ -239,6 +239,48 @@ create table if not exists public.host_profiles (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.support_tickets (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  email text not null,
+  message text not null,
+  user_id uuid references auth.users(id) on delete set null,
+  user_agent text,
+  ip text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists support_tickets_created_at_idx
+  on public.support_tickets(created_at desc);
+
+create index if not exists support_tickets_user_id_idx
+  on public.support_tickets(user_id);
+
+create table if not exists public.stripe_events (
+  id text primary key,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists stripe_events_created_at_idx
+  on public.stripe_events(created_at desc);
+
+create table if not exists public.event_images (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  storage_path text not null unique,
+  public_url text not null,
+  order_index integer not null default 0,
+  is_cover boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists event_images_event_id_idx
+  on public.event_images(event_id, is_cover desc, order_index asc, created_at asc);
+
+create unique index if not exists event_images_cover_per_event_uniq
+  on public.event_images(event_id)
+  where is_cover = true;
+
 create unique index if not exists host_profiles_stripe_customer_id_uniq
   on public.host_profiles(stripe_customer_id)
   where stripe_customer_id is not null;
