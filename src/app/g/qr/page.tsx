@@ -28,5 +28,9 @@ export default async function GuestQrPage({ searchParams }: GuestQrPageProps) {
     redirect(`/g/status?event=${guest.event.id}`);
   }
 
+  if (guest.event.is_paid_event && guest.paymentStatus !== "PAID") {
+    redirect(`/g/status?event=${guest.event.id}`);
+  }
+
   return <QrClient eventId={eventId} />;
 }

@@ -26,6 +26,20 @@ export default function Home() {
           Have an invite link?
         </a>
       </div>
+
+      <div className="mt-8 flex items-center gap-3 text-xs text-neutral-500">
+        <a href="/terms" className="underline-offset-2 hover:underline">
+          Terms
+        </a>
+        <span aria-hidden>•</span>
+        <a href="/privacy" className="underline-offset-2 hover:underline">
+          Privacy
+        </a>
+        <span aria-hidden>•</span>
+        <a href="/refunds" className="underline-offset-2 hover:underline">
+          Refunds
+        </a>
+      </div>
     </main>
   );
 }

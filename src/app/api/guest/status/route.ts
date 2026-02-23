@@ -14,6 +14,8 @@ export async function GET(request: Request) {
     guestRequestId: guestContext.guestRequestId,
     displayName: guestContext.displayName,
     status: guestContext.status,
+    paymentStatus: guestContext.paymentStatus,
+    paidAt: guestContext.paidAt,
     paymentConfirmedAt: guestContext.paymentConfirmedAt,
     guestEventStatus: guestContext.guestEventStatus,
     event: guestContext.event,

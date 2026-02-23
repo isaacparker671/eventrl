@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
-import { ensureHostProfile } from "@/lib/host/profile";
+import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
+import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type InteractionMode = "RESTRICTED" | "OPEN_CHAT";
@@ -20,6 +21,10 @@ export async function POST(
   if (!hostUser) {
     return NextResponse.redirect(new URL("/host/login", request.url), { status: 303 });
   }
+  const scannerRedirect = await getScannerOnlyRedirect(hostUser);
+  if (scannerRedirect) {
+    return NextResponse.redirect(new URL(`${scannerRedirect}?error=scanner_role_limited`, request.url), { status: 303 });
+  }
 
   const { eventId } = await context.params;
   const formData = await request.formData();
@@ -28,8 +33,7 @@ export async function POST(
   const locationText = String(formData.get("location_text") ?? "").trim();
   const capacityRaw = String(formData.get("capacity") ?? "").trim();
   const allowPlusOne = String(formData.get("allow_plus_one") ?? "") === "on";
-  const requiresPayment = String(formData.get("requires_payment") ?? "") === "on";
-  const isPaidEvent = String(formData.get("is_paid_event") ?? "") === "on";
+  const paidEntry = String(formData.get("paid_entry") ?? "") === "on";
   const priceDollarsRaw = String(formData.get("price_dollars") ?? "").trim();
   const paymentInstructions = String(formData.get("payment_instructions") ?? "").trim();
   const interactionMode = parseInteractionMode(String(formData.get("interaction_mode") ?? ""));
@@ -48,19 +52,10 @@ export async function POST(
   }
 
   const hostProfile = await ensureHostProfile(hostUser);
+  const proAccess = hasProAccess(hostProfile);
   let priceCents: number | null = null;
-  if (isPaidEvent) {
-    if (!hostProfile.is_pro || !hostProfile.stripe_account_id) {
-      return NextResponse.redirect(
-        new URL(`/host/events/${eventId}/edit?error=pro_and_connected_stripe_required_for_paid_entry`, request.url),
-        { status: 303 },
-      );
-    }
-    if (!priceDollarsRaw) {
-      return NextResponse.redirect(new URL(`/host/events/${eventId}/edit?error=price_required_for_paid_entry`, request.url), {
-        status: 303,
-      });
-    }
+  let isPaidEvent = false;
+  if (paidEntry && priceDollarsRaw) {
     const parsedPrice = Number(priceDollarsRaw);
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
       return NextResponse.redirect(new URL(`/host/events/${eventId}/edit?error=invalid_paid_entry_price`, request.url), {
@@ -68,6 +63,9 @@ export async function POST(
       });
     }
     priceCents = Math.round(parsedPrice * 100);
+  }
+  if (paidEntry && proAccess && hostProfile.stripe_account_id && priceCents && priceCents > 0) {
+    isPaidEvent = true;
   }
 
   const supabase = getSupabaseAdminClient();
@@ -79,10 +77,13 @@ export async function POST(
       location_text: locationText,
       capacity: parsedCapacity,
       allow_plus_one: allowPlusOne,
-      requires_payment: requiresPayment,
+      requires_payment: paidEntry,
       is_paid_event: isPaidEvent,
       price_cents: isPaidEvent ? priceCents : null,
       payment_instructions: paymentInstructions || null,
+      invite_title: null,
+      invite_subtitle: null,
+      invite_instructions: null,
       interaction_mode: interactionMode,
     })
     .eq("id", eventId)

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHost } from "@/lib/auth/requireHost";
-import { ensureHostProfile } from "@/lib/host/profile";
+import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type EditPageProps = {
@@ -30,8 +30,10 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
   }
 
   const startsLocal = new Date(event.starts_at).toISOString().slice(0, 16);
-  const canConfigurePaidEntry = hostProfile.is_pro && Boolean(hostProfile.stripe_account_id);
+  const proAccess = hasProAccess(hostProfile);
+  const canConfigurePaidEntry = proAccess && Boolean(hostProfile.stripe_account_id);
   const priceDollars = typeof event.price_cents === "number" ? (event.price_cents / 100).toFixed(2) : "";
+  const paidEntryEnabled = event.requires_payment || event.is_paid_event;
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
@@ -61,15 +63,16 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
             Allow plus one
           </label>
           <label className="flex items-center gap-2 text-sm text-neutral-700">
-            <input name="requires_payment" type="checkbox" defaultChecked={event.requires_payment} className="h-4 w-4 accent-orange-600" />
-            Require payment before entry
+            <input
+              name="paid_entry"
+              type="checkbox"
+              defaultChecked={paidEntryEnabled}
+              className="h-4 w-4 accent-orange-600"
+            />
+            Paid Entry
           </label>
           {canConfigurePaidEntry ? (
             <>
-              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                <input name="is_paid_event" type="checkbox" defaultChecked={event.is_paid_event} className="h-4 w-4 accent-orange-600" />
-                Paid Entry
-              </label>
               <input
                 name="price_dollars"
                 type="number"
@@ -79,19 +82,30 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
                 placeholder="Entry price in USD (e.g. 15.00)"
                 className="input-field text-sm"
               />
+              <p className="text-xs text-neutral-500">
+                With Stripe connected, guests can pay by Stripe and auto-approval is instant.
+              </p>
             </>
+          ) : proAccess ? (
+            <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-xs text-neutral-600">
+              Without Stripe Pro connection, Paid Entry uses your payment links and manual host confirmation.
+            </p>
           ) : (
             <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-xs text-neutral-600">
-              Paid Entry requires Pro and a connected Stripe account.
+              Free hosts can require manual payment with payment links. Upgrade to Pro for Stripe auto-checkout.
             </p>
           )}
-          <textarea
-            name="payment_instructions"
-            rows={3}
-            defaultValue={event.payment_instructions ?? ""}
-            placeholder="Payment instructions"
-            className="input-field text-sm"
-          />
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-700">Payment options / special instructions</p>
+            <textarea
+              name="payment_instructions"
+              rows={4}
+              defaultValue={event.payment_instructions ?? ""}
+              placeholder="Example: Pay via Cash App $yourname, include your full name in payment note, arrive by 8:30 PM."
+              className="input-field text-sm"
+            />
+            <p className="text-xs text-neutral-500">This is shown to guests on the invite and status screens.</p>
+          </div>
           <select name="interaction_mode" defaultValue={event.interaction_mode} className="input-field text-sm">
             <option value="RESTRICTED">Restricted</option>
             <option value="OPEN_CHAT">Open chat</option>

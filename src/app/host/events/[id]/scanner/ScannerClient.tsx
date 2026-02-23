@@ -25,16 +25,22 @@ export default function ScannerClient({
   initialCheckedIn,
   initialApproved,
   initialRemainingCapacity,
+  isScannerRole,
+  showLiveCounters,
 }: {
   eventId: string;
   eventName: string;
   initialCheckedIn: number;
   initialApproved: number;
   initialRemainingCapacity: number | null;
+  isScannerRole: boolean;
+  showLiveCounters: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const processingRef = useRef(false);
+  const restartTimerRef = useRef<number | null>(null);
   const lastScanAtRef = useRef(0);
 
   const [statusMessage, setStatusMessage] = useState("Point camera at guest QR.");
@@ -50,9 +56,17 @@ export default function ScannerClient({
   }, [statusTone]);
 
   useEffect(() => {
-    const run = async () => {
-      readerRef.current = new BrowserMultiFormatReader();
-      if (!videoRef.current || !readerRef.current) return;
+    const stopScanner = () => {
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+    };
+
+    const startScanner = async () => {
+      if (!videoRef.current) return;
+      if (!readerRef.current) {
+        readerRef.current = new BrowserMultiFormatReader();
+      }
+      if (!readerRef.current || controlsRef.current) return;
 
       try {
         const controls = await readerRef.current.decodeFromVideoDevice(
@@ -61,35 +75,49 @@ export default function ScannerClient({
           async (result) => {
             const text = result?.getText()?.trim();
             if (!text) return;
+            if (processingRef.current) return;
 
             const now = Date.now();
             if (now - lastScanAtRef.current < 1200) return;
             lastScanAtRef.current = now;
+            processingRef.current = true;
+            stopScanner();
 
-            const response = await fetch(`/api/host/events/${eventId}/checkin`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: text }),
-            });
+            try {
+              const response = await fetch(`/api/host/events/${eventId}/checkin`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ token: text }),
+              });
 
-            const payload = (await response.json().catch(() => null)) as ScanResult | null;
-            if (!payload) {
+              const payload = (await response.json().catch(() => null)) as ScanResult | null;
+              if (!payload) {
+                setStatusMessage("Scan failed.");
+                setStatusTone("bad");
+              } else {
+                if (payload.result === "CHECKED_IN") {
+                  setStatusMessage(`YOU'RE IN • ${payload.message}`);
+                  setStatusTone("good");
+                } else {
+                  setStatusMessage(payload.message);
+                  setStatusTone("bad");
+                }
+                if (typeof payload.checkedIn === "number") setCheckedIn(payload.checkedIn);
+                if (typeof payload.approved === "number") setApproved(payload.approved);
+                if ("remainingCapacity" in payload) {
+                  setRemainingCapacity(payload.remainingCapacity ?? null);
+                }
+              }
+            } catch {
               setStatusMessage("Scan failed.");
               setStatusTone("bad");
-              return;
-            }
-
-            if (payload.result === "CHECKED_IN") {
-              setStatusMessage(`YOU'RE IN • ${payload.message}`);
-              setStatusTone("good");
-            } else {
-              setStatusMessage(payload.message);
-              setStatusTone("bad");
-            }
-            if (typeof payload.checkedIn === "number") setCheckedIn(payload.checkedIn);
-            if (typeof payload.approved === "number") setApproved(payload.approved);
-            if ("remainingCapacity" in payload) {
-              setRemainingCapacity(payload.remainingCapacity ?? null);
+            } finally {
+              restartTimerRef.current = window.setTimeout(() => {
+                processingRef.current = false;
+                setStatusMessage("Point camera at guest QR.");
+                setStatusTone("neutral");
+                void startScanner();
+              }, 900);
             }
           },
         );
@@ -101,21 +129,76 @@ export default function ScannerClient({
       }
     };
 
-    void run();
+    void startScanner();
 
     return () => {
-      controlsRef.current?.stop();
+      if (restartTimerRef.current !== null) {
+        window.clearTimeout(restartTimerRef.current);
+      }
+      stopScanner();
     };
   }, [eventId]);
+
+  useEffect(() => {
+    if (!showLiveCounters) {
+      return;
+    }
+
+    let interval: number | null = null;
+
+    const pullStats = async () => {
+      if (document.visibilityState !== "visible") return;
+      const response = await fetch(`/api/host/events/${eventId}/checkin-stats`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as
+        | { checkedIn?: number; approved?: number; remainingCapacity?: number | null }
+        | null;
+      if (!response.ok || !payload) return;
+      if (typeof payload.checkedIn === "number") setCheckedIn(payload.checkedIn);
+      if (typeof payload.approved === "number") setApproved(payload.approved);
+      if ("remainingCapacity" in payload) setRemainingCapacity(payload.remainingCapacity ?? null);
+    };
+
+    const start = () => {
+      if (document.visibilityState !== "visible" || interval !== null) return;
+      interval = window.setInterval(() => {
+        void pullStats();
+      }, 2500);
+    };
+
+    const stop = () => {
+      if (interval === null) return;
+      window.clearInterval(interval);
+      interval = null;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void pullStats();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    void pullStats();
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [eventId, showLiveCounters]);
 
   return (
     <main className="app-shell min-h-screen text-neutral-900 p-4">
       <div className="mx-auto w-full max-w-md space-y-4 fade-in">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">{eventName}</h1>
-          <Link href={`/host/events/${eventId}`} className="link-btn">
-            Back
-          </Link>
+          {isScannerRole ? null : (
+            <Link href={`/host/events/${eventId}`} className="link-btn">
+              Back
+            </Link>
+          )}
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-neutral-200 shadow-sm">
@@ -124,20 +207,26 @@ export default function ScannerClient({
 
         <div className={`rounded-xl border px-3 py-3 text-sm font-medium shadow-sm ${statusClass}`}>{statusMessage}</div>
 
-        <div className="grid grid-cols-3 gap-2 text-center text-sm">
-          <div className="rounded-lg border border-neutral-200 p-2">
-            <p className="text-xs text-neutral-500">Checked-in</p>
-            <p className="font-semibold">{checkedIn}</p>
+        {showLiveCounters ? (
+          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+            <div className="rounded-lg border border-neutral-200 p-2">
+              <p className="text-xs text-neutral-500">Checked-in</p>
+              <p className="font-semibold">{checkedIn}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-200 p-2">
+              <p className="text-xs text-neutral-500">Approved</p>
+              <p className="font-semibold">{approved}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-200 p-2">
+              <p className="text-xs text-neutral-500">Remaining</p>
+              <p className="font-semibold">{remainingCapacity ?? "∞"}</p>
+            </div>
           </div>
-          <div className="rounded-lg border border-neutral-200 p-2">
-            <p className="text-xs text-neutral-500">Approved</p>
-            <p className="font-semibold">{approved}</p>
+        ) : (
+          <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-center text-xs text-neutral-600">
+            Live approved vs checked-in counters are Pro-only.
           </div>
-          <div className="rounded-lg border border-neutral-200 p-2">
-            <p className="text-xs text-neutral-500">Remaining</p>
-            <p className="font-semibold">{remainingCapacity ?? "∞"}</p>
-          </div>
-        </div>
+        )}
       </div>
     </main>
   );

@@ -37,6 +37,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   }
   const event = Array.isArray(invite.events) ? invite.events[0] : invite.events;
   if (!event) notFound();
+
   const existingMembership = await getGuestMembershipForEvent(event.id);
   const errorMessage =
     query.error === "missing_name"
@@ -132,6 +133,20 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         <Link href="/g/events" className="secondary-btn mt-4 inline-flex">
           Already requested? Open My Events
         </Link>
+
+        <div className="mt-4 flex items-center justify-center gap-3 text-xs text-neutral-500">
+          <Link href="/terms" className="underline-offset-2 hover:underline">
+            Terms
+          </Link>
+          <span aria-hidden>•</span>
+          <Link href="/privacy" className="underline-offset-2 hover:underline">
+            Privacy
+          </Link>
+          <span aria-hidden>•</span>
+          <Link href="/refunds" className="underline-offset-2 hover:underline">
+            Refunds
+          </Link>
+        </div>
       </div>
     </main>
   );

@@ -11,6 +11,7 @@ export default function HostLoginPage() {
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -33,6 +34,11 @@ export default function HostLoginPage() {
 
     try {
       if (mode === "signup") {
+        if (password !== confirmPassword) {
+          setErrorMessage("Passwords do not match.");
+          return;
+        }
+
         const { data, error } = await supabase.auth.signUp({ email, password });
 
         if (error) {
@@ -45,8 +51,18 @@ export default function HostLoginPage() {
           return;
         }
 
-        setInfoMessage("Account created. Check your email to confirm and then sign in.");
-        setMode("login");
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (!signInError) {
+          window.location.assign("/host/dashboard");
+          return;
+        }
+
+        if (signInError.message.toLowerCase().includes("confirm")) {
+          setErrorMessage("Turn off Supabase email confirmation to auto-sign in after signup.");
+          return;
+        }
+
+        setErrorMessage(signInError.message);
         return;
       }
 
@@ -88,6 +104,7 @@ export default function HostLoginPage() {
                 setMode("login");
                 setErrorMessage(null);
                 setInfoMessage(null);
+                setConfirmPassword("");
               }}
               disabled={isBusy}
             >
@@ -104,6 +121,7 @@ export default function HostLoginPage() {
                 setMode("signup");
                 setErrorMessage(null);
                 setInfoMessage(null);
+                setConfirmPassword("");
               }}
               disabled={isBusy}
             >
@@ -135,6 +153,20 @@ export default function HostLoginPage() {
               disabled={isBusy}
             />
 
+            {mode === "signup" ? (
+              <input
+                className="input-field text-base text-neutral-900"
+                placeholder="Confirm password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength={6}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                disabled={isBusy}
+              />
+            ) : null}
+
             <button
               className="primary-btn w-full py-3 text-base font-medium active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-70"
               type="submit"
@@ -155,6 +187,12 @@ export default function HostLoginPage() {
           </div>
 
           <div className="mt-4 space-y-2">
+            <div className="rounded-xl border border-orange-300 bg-orange-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Pro - $14.99/month</p>
+              <p className="mt-1 text-sm text-neutral-700">
+                Stripe connect + paid entry automation, revenue dashboard totals, live check-in counters, and extra team scanner access.
+              </p>
+            </div>
             <div className="rounded-xl border border-orange-200 bg-white p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Invite-Only Security</p>
               <p className="mt-1 text-sm text-neutral-700">Unguessable links, QR entry, duplicate check-in protection, and instant revoke.</p>
@@ -170,6 +208,15 @@ export default function HostLoginPage() {
             <div className="rounded-xl border border-orange-200 bg-white p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Mobile-First Simplicity</p>
               <p className="mt-1 text-sm text-neutral-700">Clean dashboard and quick actions for hosts running events in real life.</p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-2">
+            <div className="rounded-xl border border-neutral-200 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-700">Free Plan</p>
+              <p className="mt-1 text-sm text-neutral-700">
+                Create private events, approve guests, manual payment links, and core QR door check-in.
+              </p>
             </div>
           </div>
         </section>

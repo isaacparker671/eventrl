@@ -17,6 +17,8 @@ type GuestStatus =
   | "LEFT"
   | "CANT_MAKE";
 
+type GuestPaymentStatus = "PENDING" | "PAID" | "FAILED";
+
 export type GuestMembership = {
   eventId: string;
   guestRequestId: string;
@@ -27,6 +29,8 @@ export type GuestContext = {
   guestRequestId: string;
   displayName: string;
   status: GuestStatus;
+  paymentStatus: GuestPaymentStatus;
+  paidAt: string | null;
   paymentConfirmedAt: string | null;
   guestEventStatus: "ARRIVING" | "RUNNING_LATE" | "CANT_MAKE" | null;
   event: {
@@ -140,6 +144,8 @@ async function getGuestContextFromMembership(membership: GuestMembership): Promi
       id,
       display_name,
       status,
+      payment_status,
+      paid_at,
       payment_confirmed_at,
       guest_event_status,
       event_id,
@@ -185,6 +191,8 @@ async function getGuestContextFromMembership(membership: GuestMembership): Promi
     guestRequestId: guestRequestRow.id,
     displayName: guestRequestRow.display_name,
     status: guestRequestRow.status,
+    paymentStatus: guestRequestRow.payment_status,
+    paidAt: guestRequestRow.paid_at,
     paymentConfirmedAt: guestRequestRow.payment_confirmed_at,
     guestEventStatus: guestRequestRow.guest_event_status,
     event: {

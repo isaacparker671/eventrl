@@ -32,6 +32,8 @@ export default async function GuestRecoveryPage({ searchParams }: GuestRecoveryP
     redirect(`/g/status?event=${guest.event.id}`);
   }
 
+  const shouldShowStripeCheckout = guest.event.is_paid_event && guest.status === "PENDING_PAYMENT";
+
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
       <div className="glass-card fade-in mx-auto w-full max-w-md rounded-2xl p-5 text-center">
@@ -43,9 +45,20 @@ export default async function GuestRecoveryPage({ searchParams }: GuestRecoveryP
           <p className="text-4xl font-bold tracking-[0.3em] text-orange-700">{guestRow.recovery_code}</p>
         </div>
 
-        <Link href={`/g/status?event=${guest.event.id}`} className="primary-btn mt-5 block w-full py-3 text-sm font-medium">
-          I Saved It
-        </Link>
+        {shouldShowStripeCheckout ? (
+          <form method="post" action="/api/stripe/checkout" className="mt-5">
+            <input type="hidden" name="event" value={guest.event.id} />
+            <input type="hidden" name="guestRequest" value={guest.guestRequestId} />
+            <input type="hidden" name="slug" value={guest.event.invite_slug} />
+            <button type="submit" className="primary-btn block w-full py-3 text-sm font-medium">
+              I Saved It, Continue to Payment
+            </button>
+          </form>
+        ) : (
+          <Link href={`/g/status?event=${guest.event.id}`} className="primary-btn mt-5 block w-full py-3 text-sm font-medium">
+            I Saved It
+          </Link>
+        )}
       </div>
     </main>
   );

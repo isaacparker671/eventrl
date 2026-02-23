@@ -149,6 +149,8 @@ export async function POST(
     await supabase
       .from("guest_requests")
       .update({
+        payment_status: "PAID",
+        paid_at: now,
         payment_confirmed_at: now,
       })
       .eq("id", guestRequestId)

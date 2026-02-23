@@ -8,6 +8,9 @@ alter table if exists public.events
   add column if not exists capacity integer,
   add column if not exists allow_plus_one boolean not null default false,
   add column if not exists payment_instructions text,
+  add column if not exists invite_title text,
+  add column if not exists invite_subtitle text,
+  add column if not exists invite_instructions text,
   add column if not exists requires_payment boolean not null default false,
   add column if not exists is_paid_event boolean not null default false,
   add column if not exists price_cents integer,
@@ -78,6 +81,47 @@ $$;
 
 create index if not exists events_host_user_id_idx on public.events(host_user_id);
 
+create table if not exists public.event_scanner_roles (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  owner_host_user_id uuid not null references auth.users(id) on delete cascade,
+  scanner_email text not null,
+  status text not null default 'ACTIVE' check (status in ('ACTIVE', 'REVOKED')),
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+
+alter table if exists public.event_scanner_roles
+  add column if not exists event_id uuid references public.events(id) on delete cascade,
+  add column if not exists owner_host_user_id uuid references auth.users(id) on delete cascade,
+  add column if not exists scanner_email text,
+  add column if not exists status text not null default 'ACTIVE',
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists revoked_at timestamptz;
+
+update public.event_scanner_roles
+set scanner_email = lower(trim(scanner_email))
+where scanner_email is not null;
+
+do $$
+begin
+  if exists (
+    select 1 from pg_constraint where conname = 'event_scanner_roles_status_check'
+  ) then
+    alter table public.event_scanner_roles drop constraint event_scanner_roles_status_check;
+  end if;
+
+  alter table public.event_scanner_roles
+    add constraint event_scanner_roles_status_check
+    check (status in ('ACTIVE', 'REVOKED'));
+end
+$$;
+
+create unique index if not exists event_scanner_roles_event_email_uniq
+  on public.event_scanner_roles(event_id, scanner_email);
+create index if not exists event_scanner_roles_scanner_email_idx
+  on public.event_scanner_roles(scanner_email, status);
+
 create table if not exists public.invite_links (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null unique references public.events(id) on delete cascade,
@@ -114,6 +158,9 @@ create table if not exists public.guest_requests (
   display_name text not null,
   guest_email text,
   status text not null default 'PENDING' check (status in ('PENDING', 'PENDING_PAYMENT', 'APPROVED', 'REJECTED', 'WAITLIST', 'REVOKED', 'LEFT', 'CANT_MAKE')),
+  payment_status text not null default 'PENDING' check (payment_status in ('PENDING', 'PAID', 'FAILED')),
+  stripe_checkout_session_id text,
+  paid_at timestamptz,
   approved_at timestamptz,
   decision_at timestamptz,
   rejected_at timestamptz,
@@ -128,6 +175,9 @@ alter table if exists public.guest_requests
   add column if not exists recovery_code text,
   add column if not exists plus_one_requested boolean not null default false,
   add column if not exists status text,
+  add column if not exists payment_status text not null default 'PENDING',
+  add column if not exists stripe_checkout_session_id text,
+  add column if not exists paid_at timestamptz,
   add column if not exists approved_at timestamptz,
   add column if not exists decision_at timestamptz,
   add column if not exists payment_confirmed_at timestamptz,
@@ -140,6 +190,23 @@ alter table if exists public.guest_requests
 update public.guest_requests
 set status = 'PENDING'
 where status is null;
+
+update public.guest_requests
+set payment_status = case
+  when payment_confirmed_at is not null then 'PAID'
+  else 'PENDING'
+end
+where payment_status is null;
+
+update public.guest_requests
+set payment_status = case
+  when upper(trim(payment_status)) = 'PAID' then 'PAID'
+  when upper(trim(payment_status)) = 'FAILED' then 'FAILED'
+  when payment_confirmed_at is not null then 'PAID'
+  else 'PENDING'
+end
+where payment_status is not null
+  and upper(trim(payment_status)) not in ('PENDING', 'PAID', 'FAILED');
 
 do $$
 begin
@@ -157,11 +224,30 @@ begin
 end
 $$;
 
+do $$
+begin
+  if exists (
+    select 1
+    from pg_constraint
+    where conname = 'guest_requests_payment_status_check'
+  ) then
+    alter table public.guest_requests drop constraint guest_requests_payment_status_check;
+  end if;
+
+  alter table public.guest_requests
+    add constraint guest_requests_payment_status_check
+    check (payment_status in ('PENDING', 'PAID', 'FAILED'));
+end
+$$;
+
 create index if not exists guest_requests_event_id_idx on public.guest_requests(event_id);
 create index if not exists guest_requests_status_idx on public.guest_requests(status);
 create unique index if not exists guest_requests_event_recovery_code_uniq
   on public.guest_requests(event_id, recovery_code)
   where recovery_code is not null;
+create unique index if not exists guest_requests_stripe_checkout_session_id_uniq
+  on public.guest_requests(stripe_checkout_session_id)
+  where stripe_checkout_session_id is not null;
 
 create table if not exists public.guest_access (
   id uuid primary key default gen_random_uuid(),
@@ -490,6 +576,10 @@ create table if not exists public.host_profiles (
   is_pro boolean not null default false,
   stripe_account_id text,
   stripe_connected_at timestamptz,
+  stripe_customer_id text,
+  stripe_subscription_id text,
+  subscription_status text,
+  current_period_end timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -505,5 +595,24 @@ alter table if exists public.host_profiles
   add column if not exists is_pro boolean not null default false,
   add column if not exists stripe_account_id text,
   add column if not exists stripe_connected_at timestamptz,
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text,
+  add column if not exists subscription_status text,
+  add column if not exists current_period_end timestamptz,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
+
+update public.host_profiles
+set is_pro = case
+  when subscription_status in ('active', 'trialing') then true
+  else false
+end
+where subscription_status is not null;
+
+create unique index if not exists host_profiles_stripe_customer_id_uniq
+  on public.host_profiles(stripe_customer_id)
+  where stripe_customer_id is not null;
+
+create unique index if not exists host_profiles_stripe_subscription_id_uniq
+  on public.host_profiles(stripe_subscription_id)
+  where stripe_subscription_id is not null;

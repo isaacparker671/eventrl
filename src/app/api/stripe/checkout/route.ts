@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGuestMembershipForEvent } from "@/lib/eventrl/guestSession";
+import { hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 function getRequiredEnv(name: "APP_URL" | "STRIPE_SECRET_KEY") {
@@ -10,11 +11,11 @@ function getRequiredEnv(name: "APP_URL" | "STRIPE_SECRET_KEY") {
   return value;
 }
 
-export async function GET(request: Request) {
-  const requestUrl = new URL(request.url);
-  const eventId = requestUrl.searchParams.get("event") ?? "";
-  const guestRequestId = requestUrl.searchParams.get("guestRequest") ?? "";
-  const slug = requestUrl.searchParams.get("slug") ?? "";
+export async function POST(request: Request) {
+  const formData = await request.formData();
+  const eventId = String(formData.get("event") ?? "").trim();
+  const guestRequestId = String(formData.get("guestRequest") ?? "").trim();
+  const slug = String(formData.get("slug") ?? "").trim();
 
   if (!eventId || !guestRequestId || !slug) {
     return NextResponse.redirect(new URL("/join", request.url), { status: 303 });
@@ -28,7 +29,9 @@ export async function GET(request: Request) {
   const supabase = getSupabaseAdminClient();
   const { data: guestRequest, error: guestError } = await supabase
     .from("guest_requests")
-    .select("id, event_id, status, guest_email, events!inner(id, name, invite_slug, is_paid_event, price_cents, host_user_id)")
+    .select(
+      "id, event_id, status, payment_status, guest_email, events!inner(id, name, invite_slug, is_paid_event, price_cents, host_user_id)",
+    )
     .eq("id", guestRequestId)
     .eq("event_id", eventId)
     .single();
@@ -50,17 +53,21 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`/g/status?event=${event.id}`, request.url), { status: 303 });
   }
 
+  if (guestRequest.payment_status === "PAID") {
+    return NextResponse.redirect(new URL(`/g/status?event=${event.id}`, request.url), { status: 303 });
+  }
+
   if (guestRequest.status !== "PENDING_PAYMENT") {
     return NextResponse.redirect(new URL(`/i/${event.invite_slug}?error=invalid_join_status`, request.url), { status: 303 });
   }
 
   const { data: hostProfile } = await supabase
     .from("host_profiles")
-    .select("is_pro, stripe_account_id")
+    .select("subscription_status, stripe_account_id")
     .eq("user_id", event.host_user_id)
     .maybeSingle();
 
-  if (!hostProfile || !hostProfile.is_pro || !hostProfile.stripe_account_id) {
+  if (!hostProfile || !hasProAccess(hostProfile) || !hostProfile.stripe_account_id) {
     return NextResponse.redirect(new URL(`/i/${event.invite_slug}?error=host_payment_unavailable`, request.url), { status: 303 });
   }
 
@@ -96,15 +103,25 @@ export async function GET(request: Request) {
     });
 
     const stripePayload = (await stripeResponse.json().catch(() => null)) as
-      | { url?: string; error?: { message?: string } }
+      | { id?: string; url?: string; error?: { message?: string } }
       | null;
 
-    if (!stripeResponse.ok || !stripePayload?.url) {
+    if (!stripeResponse.ok || !stripePayload?.url || !stripePayload?.id) {
       const message = stripePayload?.error?.message ?? "Could not start checkout session.";
       return NextResponse.redirect(new URL(`/i/${event.invite_slug}?error=${encodeURIComponent(message)}`, request.url), {
         status: 303,
       });
     }
+
+    await supabase
+      .from("guest_requests")
+      .update({
+        payment_status: "PENDING",
+        stripe_checkout_session_id: stripePayload.id,
+        paid_at: null,
+      })
+      .eq("id", guestRequest.id)
+      .eq("event_id", event.id);
 
     return NextResponse.redirect(stripePayload.url, { status: 303 });
   } catch (error) {

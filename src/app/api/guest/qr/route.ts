@@ -18,6 +18,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Payment not confirmed by host yet." }, { status: 403 });
   }
 
+  if (guestContext.event.is_paid_event && guestContext.paymentStatus !== "PAID") {
+    return NextResponse.json({ error: "Stripe payment not completed yet." }, { status: 403 });
+  }
+
   const rawToken = randomToken(32);
   const tokenHash = sha256Hex(rawToken);
   const now = new Date().toISOString();

@@ -2,25 +2,31 @@
 
 import { useState } from "react";
 
-export default function DeleteEventForm({ eventId }: { eventId: string }) {
+export default function DeleteAccountForm() {
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const canDelete = confirmText === "DELETE";
 
   return (
-    <div className="mt-4 rounded-xl border border-red-200 bg-red-50/70 p-3">
+    <section className="glass-card rounded-2xl border border-red-200 bg-red-50/60 p-5">
+      <h2 className="text-base font-semibold text-red-700">Delete Account</h2>
+      <p className="mt-1 text-xs text-red-700">
+        This deletes your host account and all events tied to it.
+      </p>
+
       {!open ? (
         <button
           type="button"
-          className="w-full rounded-lg border border-red-200 bg-red-100 px-3 py-3 text-sm font-medium text-red-700 hover:bg-red-200"
+          className="mt-3 w-full rounded-lg border border-red-200 bg-red-100 px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-200"
           onClick={() => setOpen(true)}
         >
-          Delete Event
+          Delete My Account
         </button>
       ) : (
-        <form method="post" action={`/api/host/events/${eventId}/delete`} className="space-y-2">
-          <p className="text-xs text-red-700">Type <span className="font-semibold">DELETE</span> to confirm.</p>
-          <p className="text-xs text-red-700/90">This also removes this event’s stats and revenue from your dashboard.</p>
+        <form method="post" action="/api/host/account/delete" className="mt-3 space-y-2">
+          <p className="text-xs text-red-700">
+            Type <span className="font-semibold">DELETE</span> to confirm.
+          </p>
           <input
             name="confirm_text"
             value={confirmText}
@@ -50,6 +56,6 @@ export default function DeleteEventForm({ eventId }: { eventId: string }) {
           </div>
         </form>
       )}
-    </div>
+    </section>
   );
 }

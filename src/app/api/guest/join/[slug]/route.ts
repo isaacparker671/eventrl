@@ -30,7 +30,8 @@ export async function POST(
       revoked_at,
       events!inner (
         id,
-        is_paid_event
+        is_paid_event,
+        requires_payment
       )
       `,
     )
@@ -45,6 +46,7 @@ export async function POST(
     return NextResponse.redirect(new URL("/", request.url), { status: 303 });
   }
   const isPaidEvent = Boolean(event.is_paid_event);
+  const requiresPayment = Boolean(event.requires_payment);
 
   let guestRequest: { id: string; recovery_code: string | null } | null = null;
   let requestErrorMessage = "join_failed";
@@ -59,6 +61,7 @@ export async function POST(
         recovery_code: recoveryCode,
         plus_one_requested: plusOneRequested,
         status: isPaidEvent ? "PENDING_PAYMENT" : "PENDING",
+        payment_status: isPaidEvent || requiresPayment ? "PENDING" : "PAID",
       })
       .select("id, recovery_code")
       .single();
@@ -76,10 +79,7 @@ export async function POST(
     });
   }
 
-  const nextUrl = isPaidEvent
-    ? `/api/stripe/checkout?event=${event.id}&guestRequest=${guestRequest.id}&slug=${encodeURIComponent(slug)}`
-    : `/g/recovery?event=${event.id}`;
-  const response = NextResponse.redirect(new URL(nextUrl, request.url), { status: 303 });
+  const response = NextResponse.redirect(new URL(`/g/recovery?event=${event.id}`, request.url), { status: 303 });
   const membershipSet = await addGuestMembershipToResponse(response, {
     eventId: event.id,
     guestRequestId: guestRequest.id,
