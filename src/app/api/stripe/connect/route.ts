@@ -3,12 +3,16 @@ import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 
-function getRequiredEnv(name: "APP_URL" | "STRIPE_CONNECT_CLIENT_ID") {
+function getRequiredEnv(name: "STRIPE_CONNECT_CLIENT_ID") {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
+}
+
+function getAppUrl(request: Request) {
+  return new URL(request.url).origin.replace(/\/$/, "");
 }
 
 export async function GET(request: Request) {
@@ -29,9 +33,9 @@ export async function GET(request: Request) {
       });
     }
 
-    const appUrl = getRequiredEnv("APP_URL");
+    const appUrl = getAppUrl(request);
     const clientId = getRequiredEnv("STRIPE_CONNECT_CLIENT_ID");
-    const redirectUri = `${appUrl.replace(/\/$/, "")}/api/stripe/callback`;
+    const redirectUri = `${appUrl}/api/stripe/callback`;
 
     const stripeUrl = new URL("https://connect.stripe.com/oauth/authorize");
     stripeUrl.searchParams.set("response_type", "code");

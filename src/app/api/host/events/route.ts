@@ -117,6 +117,9 @@ export async function POST(request: Request) {
           { onConflict: "event_id,host_user_id" },
         );
       }
+      if (data?.id) {
+        return NextResponse.redirect(new URL(`/host/events/${data.id}`, request.url), { status: 303 });
+      }
       return NextResponse.redirect(new URL("/host/dashboard", request.url), { status: 303 });
     }
 

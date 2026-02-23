@@ -13,6 +13,13 @@ function parseInteractionMode(value: string | null): InteractionMode {
   return "RESTRICTED";
 }
 
+function normalizeInviteSlug(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  if (!/^[a-z0-9_-]{4,64}$/.test(normalized)) return "__invalid__";
+  return normalized;
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ eventId: string }> },
@@ -36,6 +43,7 @@ export async function POST(
   const paidEntry = String(formData.get("paid_entry") ?? "") === "on";
   const priceDollarsRaw = String(formData.get("price_dollars") ?? "").trim();
   const paymentInstructions = String(formData.get("payment_instructions") ?? "").trim();
+  const customInviteSlugRaw = String(formData.get("custom_invite_slug") ?? "");
   const interactionMode = parseInteractionMode(String(formData.get("interaction_mode") ?? ""));
 
   if (!name || !startsAt || !locationText) {
@@ -71,7 +79,7 @@ export async function POST(
   const supabase = getSupabaseAdminClient();
   const { data: eventRow } = await supabase
     .from("events")
-    .select("id, host_user_id")
+    .select("id, host_user_id, invite_slug")
     .eq("id", eventId)
     .maybeSingle();
   if (!eventRow) {
@@ -81,23 +89,42 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const normalizedInviteSlug = normalizeInviteSlug(customInviteSlugRaw);
+  if (normalizedInviteSlug === "__invalid__") {
+    return NextResponse.redirect(
+      new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent("Invalid custom invite slug format.")}`, request.url),
+      { status: 303 },
+    );
+  }
+  if (normalizedInviteSlug && !proAccess) {
+    return NextResponse.redirect(
+      new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent("Pro required for custom invite links.")}`, request.url),
+      { status: 303 },
+    );
+  }
+
+  const eventUpdatePayload: Record<string, string | number | boolean | null> = {
+    name,
+    starts_at: new Date(startsAt).toISOString(),
+    location_text: locationText,
+    capacity: parsedCapacity,
+    allow_plus_one: allowPlusOne,
+    requires_payment: paidEntry,
+    is_paid_event: isPaidEvent,
+    price_cents: isPaidEvent ? priceCents : null,
+    payment_instructions: paymentInstructions || null,
+    invite_title: null,
+    invite_subtitle: null,
+    invite_instructions: null,
+    interaction_mode: interactionMode,
+  };
+  if (normalizedInviteSlug) {
+    eventUpdatePayload.invite_slug = normalizedInviteSlug;
+  }
+
   const { error } = await supabase
     .from("events")
-    .update({
-      name,
-      starts_at: new Date(startsAt).toISOString(),
-      location_text: locationText,
-      capacity: parsedCapacity,
-      allow_plus_one: allowPlusOne,
-      requires_payment: paidEntry,
-      is_paid_event: isPaidEvent,
-      price_cents: isPaidEvent ? priceCents : null,
-      payment_instructions: paymentInstructions || null,
-      invite_title: null,
-      invite_subtitle: null,
-      invite_instructions: null,
-      interaction_mode: interactionMode,
-    })
+    .update(eventUpdatePayload)
     .eq("id", eventId);
 
   if (error) {
@@ -105,6 +132,23 @@ export async function POST(
       new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(error.message)}`, request.url),
       { status: 303 },
     );
+  }
+
+  if (normalizedInviteSlug && normalizedInviteSlug !== eventRow.invite_slug) {
+    const { error: inviteError } = await supabase.from("invite_links").upsert(
+      {
+        event_id: eventId,
+        created_by_host_user_id: hostUser.id,
+        slug: normalizedInviteSlug,
+      },
+      { onConflict: "event_id" },
+    );
+    if (inviteError) {
+      return NextResponse.redirect(
+        new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(inviteError.message)}`, request.url),
+        { status: 303 },
+      );
+    }
   }
 
   return NextResponse.redirect(new URL(`/host/events/${eventId}?saved=1`, request.url), { status: 303 });

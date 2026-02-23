@@ -114,12 +114,15 @@ export default async function HostDashboardPage({ searchParams }: DashboardProps
               required
               className="input-field text-sm"
             />
-            <input
-              name="starts_at"
-              type="datetime-local"
-              required
-              className="input-field text-sm"
-            />
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-neutral-700">Date & time</p>
+              <input
+                name="starts_at"
+                type="datetime-local"
+                required
+                className="input-field h-11 text-sm"
+              />
+            </div>
             <input
               name="location_text"
               placeholder="Location"

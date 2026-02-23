@@ -3,12 +3,16 @@ import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 
-function getRequiredEnv(name: "APP_URL" | "STRIPE_SECRET_KEY") {
+function getRequiredEnv(name: "STRIPE_SECRET_KEY") {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
+}
+
+function getAppUrl(request: Request) {
+  return new URL(request.url).origin.replace(/\/$/, "");
 }
 
 export async function POST(request: Request) {
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const appUrl = getRequiredEnv("APP_URL").replace(/\/$/, "");
+    const appUrl = getAppUrl(request);
     const stripeSecretKey = getRequiredEnv("STRIPE_SECRET_KEY");
     const body = new URLSearchParams();
     body.set("customer", profile.stripe_customer_id);

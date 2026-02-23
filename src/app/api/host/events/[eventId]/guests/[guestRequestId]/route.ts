@@ -60,14 +60,7 @@ export async function POST(
   const now = new Date().toISOString();
 
   if (action === "APPROVE") {
-    const { data: guestRow } = await supabase
-      .from("guest_requests")
-      .select("display_name")
-      .eq("id", guestRequestId)
-      .eq("event_id", eventId)
-      .single();
-
-    const { error: updateError } = await supabase
+    const { data: guestRow, error: updateError } = await supabase
       .from("guest_requests")
       .update({
         status: "APPROVED",
@@ -77,7 +70,9 @@ export async function POST(
         revoked_at: null,
       })
       .eq("id", guestRequestId)
-      .eq("event_id", eventId);
+      .eq("event_id", eventId)
+      .select("display_name")
+      .maybeSingle();
 
     if (updateError) {
       return NextResponse.redirect(
@@ -88,34 +83,34 @@ export async function POST(
 
     const token = randomToken(32);
     const tokenHash = sha256Hex(token);
-    await supabase.from("guest_access").upsert(
-      {
+    await Promise.all([
+      supabase.from("guest_access").upsert(
+        {
+          event_id: eventId,
+          guest_request_id: guestRequestId,
+          qr_token_hash: tokenHash,
+          token_hash: tokenHash,
+          issued_at: now,
+          revoked_at: null,
+        },
+        { onConflict: "guest_request_id" },
+      ),
+      supabase.from("event_chat_members").upsert(
+        {
+          event_id: eventId,
+          role: "GUEST",
+          guest_request_id: guestRequestId,
+          joined_at: now,
+        },
+        { onConflict: "event_id,guest_request_id" },
+      ),
+      supabase.from("event_chat_messages").insert({
         event_id: eventId,
-        guest_request_id: guestRequestId,
-        qr_token_hash: tokenHash,
-        token_hash: tokenHash,
-        issued_at: now,
-        revoked_at: null,
-      },
-      { onConflict: "guest_request_id" },
-    );
-
-    await supabase.from("event_chat_members").upsert(
-      {
-        event_id: eventId,
-        role: "GUEST",
-        guest_request_id: guestRequestId,
-        joined_at: now,
-      },
-      { onConflict: "event_id,guest_request_id" },
-    );
-
-    await supabase.from("event_chat_messages").insert({
-      event_id: eventId,
-      sender_type: "SYSTEM",
-      sender_name: "Eventrl",
-      body: `${guestRow?.display_name ?? "A guest"} was approved and joined the chat.`,
-    });
+        sender_type: "SYSTEM",
+        sender_name: "Eventrl",
+        body: `${guestRow?.display_name ?? "A guest"} was approved and joined the chat.`,
+      }),
+    ]);
   }
 
   if (action === "REJECT") {

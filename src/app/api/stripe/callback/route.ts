@@ -4,12 +4,16 @@ import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-function getRequiredEnv(name: "APP_URL" | "STRIPE_CONNECT_CLIENT_ID" | "STRIPE_SECRET_KEY") {
+function getRequiredEnv(name: "STRIPE_CONNECT_CLIENT_ID" | "STRIPE_SECRET_KEY") {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
+}
+
+function getAppUrl(request: Request) {
+  return new URL(request.url).origin.replace(/\/$/, "");
 }
 
 export async function GET(request: Request) {
@@ -45,10 +49,10 @@ export async function GET(request: Request) {
       });
     }
 
-    const appUrl = getRequiredEnv("APP_URL");
+    const appUrl = getAppUrl(request);
     const clientId = getRequiredEnv("STRIPE_CONNECT_CLIENT_ID");
     const stripeSecretKey = getRequiredEnv("STRIPE_SECRET_KEY");
-    const redirectUri = `${appUrl.replace(/\/$/, "")}/api/stripe/callback`;
+    const redirectUri = `${appUrl}/api/stripe/callback`;
 
     const form = new URLSearchParams();
     form.set("grant_type", "authorization_code");

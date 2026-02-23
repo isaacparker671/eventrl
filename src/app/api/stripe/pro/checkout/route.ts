@@ -5,12 +5,17 @@ import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 
 const PRO_PRICE_ID = "price_1T3nQSKWU9iJpCXSZqSHzAi2";
 
-function getRequiredEnv(name: "APP_URL" | "STRIPE_SECRET_KEY") {
+function getRequiredEnv(name: "STRIPE_SECRET_KEY") {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
+}
+
+function getAppUrl(request: Request) {
+  const origin = new URL(request.url).origin;
+  return origin.replace(/\/$/, "");
 }
 
 export async function POST(request: Request) {
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.redirect(new URL("/host/settings?saved=1", request.url), { status: 303 });
     }
 
-    const appUrl = getRequiredEnv("APP_URL").replace(/\/$/, "");
+    const appUrl = getAppUrl(request);
     const stripeSecretKey = getRequiredEnv("STRIPE_SECRET_KEY");
     const form = new URLSearchParams();
     form.set("mode", "subscription");

@@ -320,6 +320,49 @@ create table if not exists public.checkins (
   checker_host_user_id uuid not null references auth.users(id) on delete cascade
 );
 
+alter table if exists public.checkins
+  add column if not exists event_id uuid references public.events(id) on delete cascade,
+  add column if not exists guest_access_id uuid references public.guest_access(id) on delete cascade,
+  add column if not exists checked_in_at timestamptz not null default now(),
+  add column if not exists checker_host_user_id uuid references auth.users(id) on delete cascade;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'checkins'
+      and column_name = 'host_user_id'
+  ) then
+    execute '
+      update public.checkins
+      set checker_host_user_id = host_user_id
+      where checker_host_user_id is null
+        and host_user_id is not null
+    ';
+  end if;
+end
+$$;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'checkins'
+      and column_name = 'checker_host_user_id'
+      and is_nullable = 'YES'
+  ) and not exists (
+    select 1 from public.checkins where checker_host_user_id is null
+  ) then
+    alter table public.checkins
+      alter column checker_host_user_id set not null;
+  end if;
+end
+$$;
+
 create index if not exists checkins_event_id_idx on public.checkins(event_id);
 
 create table if not exists public.guest_sessions (

@@ -19,7 +19,7 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
   const { data: event, error } = await supabase
     .from("events")
     .select(
-      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, requires_payment, payment_instructions, is_paid_event, price_cents, interaction_mode",
+      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, requires_payment, payment_instructions, is_paid_event, price_cents, interaction_mode, invite_slug",
     )
     .eq("id", id)
     .eq("host_user_id", hostUser.id)
@@ -56,7 +56,10 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
 
         <form method="post" action={`/api/host/events/${id}/update`} className="glass-card rounded-2xl p-5 space-y-3">
           <input name="name" defaultValue={event.name} required className="input-field text-sm" />
-          <input name="starts_at" type="datetime-local" defaultValue={startsLocal} required className="input-field text-sm" />
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-neutral-700">Date & time</p>
+            <input name="starts_at" type="datetime-local" defaultValue={startsLocal} required className="input-field h-11 text-sm" />
+          </div>
           <input name="location_text" defaultValue={event.location_text} required className="input-field text-sm" />
           <input
             name="capacity"
@@ -114,6 +117,21 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
             />
             <p className="text-xs text-neutral-500">This is shown to guests on the invite and status screens.</p>
           </div>
+          {proAccess ? (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-neutral-700">Custom invite slug (Pro)</p>
+              <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-xs text-neutral-500">
+                /i/
+                <input
+                  name="custom_invite_slug"
+                  defaultValue={event.invite_slug ?? ""}
+                  className="ml-1 w-[calc(100%-2rem)] bg-transparent text-neutral-700 outline-none"
+                  placeholder="custom-link-slug"
+                />
+              </div>
+              <p className="text-xs text-neutral-500">Use letters, numbers, dashes, and underscores.</p>
+            </div>
+          ) : null}
           <select name="interaction_mode" defaultValue={event.interaction_mode} className="input-field text-sm">
             <option value="RESTRICTED">Restricted</option>
             <option value="OPEN_CHAT">Open chat</option>
