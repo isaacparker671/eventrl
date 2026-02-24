@@ -1,21 +1,23 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
+import { getEnvStrict } from "@/lib/env";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
-
-const PRO_PRICE_ID = "price_1T3nQSKWU9iJpCXSZqSHzAi2";
-
-function getRequiredEnv(name: "STRIPE_SECRET_KEY") {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing environment variable: ${name}`);
-  }
-  return value;
-}
 
 function getAppUrl(request: Request) {
   const origin = new URL(request.url).origin;
   return origin.replace(/\/$/, "");
+}
+
+function logProPriceOnce(priceId: string) {
+  const globalState = globalThis as typeof globalThis & {
+    __eventrl_pro_price_logged__?: boolean;
+  };
+  if (globalState.__eventrl_pro_price_logged__) {
+    return;
+  }
+  console.info("[stripe-pro-checkout] Using STRIPE_PRO_PRICE_ID", { priceId });
+  globalState.__eventrl_pro_price_logged__ = true;
 }
 
 export async function POST(request: Request) {
@@ -35,10 +37,12 @@ export async function POST(request: Request) {
     }
 
     const appUrl = getAppUrl(request);
-    const stripeSecretKey = getRequiredEnv("STRIPE_SECRET_KEY");
+    const stripeSecretKey = getEnvStrict("STRIPE_SECRET_KEY");
+    const proPriceId = getEnvStrict("STRIPE_PRO_PRICE_ID");
+    logProPriceOnce(proPriceId);
     const form = new URLSearchParams();
     form.set("mode", "subscription");
-    form.set("line_items[0][price]", PRO_PRICE_ID);
+    form.set("line_items[0][price]", proPriceId);
     form.set("line_items[0][quantity]", "1");
     form.set("success_url", `${appUrl}/host/settings?pro=success`);
     form.set("cancel_url", `${appUrl}/host/settings?pro=canceled`);
