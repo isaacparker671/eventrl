@@ -53,6 +53,15 @@ export default function HostLoginPage() {
     };
   }, [supabase]);
 
+  useEffect(() => {
+    const verified = new URLSearchParams(window.location.search).get("verified");
+    if (verified === "1") {
+      setInfoMessage("Email verified. Please sign in.");
+      setErrorMessage(null);
+      setMode("login");
+    }
+  }, []);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -103,7 +112,7 @@ export default function HostLoginPage() {
         }
 
         if (signInError.message.toLowerCase().includes("confirm")) {
-          setInfoMessage("Check your email and confirm your account. You will be signed in automatically after verification.");
+          setInfoMessage("Check your email, verify your account, then come back and sign in.");
           return;
         }
 

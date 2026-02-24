@@ -3,13 +3,6 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
-function safeNextPath(value: string | null, fallback: string) {
-  if (!value) return fallback;
-  if (!value.startsWith("/")) return fallback;
-  if (value.startsWith("//")) return fallback;
-  return value;
-}
-
 function toEmailOtpType(value: string | null): EmailOtpType | null {
   if (
     value === "signup" ||
@@ -29,7 +22,6 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const tokenHash = url.searchParams.get("token_hash");
   const otpType = toEmailOtpType(url.searchParams.get("type"));
-  const nextPath = safeNextPath(url.searchParams.get("next"), "/host/dashboard");
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -75,5 +67,5 @@ export async function GET(request: Request) {
     );
   }
 
-  return NextResponse.redirect(new URL(nextPath, request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/host/login?verified=1", request.url), { status: 303 });
 }
