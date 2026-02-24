@@ -6,11 +6,10 @@ import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import InviteLinkCard from "./InviteLinkCard";
 import DeleteEventForm from "./DeleteEventForm";
-import ScannerRolesManager from "./ScannerRolesManager";
 
 type EventPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; scannerInvite?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; scannerCode?: string }>;
 };
 
 export default async function HostEventPage({ params, searchParams }: EventPageProps) {
@@ -24,7 +23,7 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
   const { data: event, error: eventError } = await supabase
     .from("events")
     .select(
-      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, payment_instructions, requires_payment, is_paid_event, price_cents, interaction_mode, invite_slug",
+      "id, host_user_id, name, starts_at, location_text, capacity, allow_plus_one, payment_instructions, requires_payment, is_paid_event, price_cents, interaction_mode, invite_slug, scanner_access_code",
     )
     .eq("id", id)
     .eq("host_user_id", hostUser.id)
@@ -60,14 +59,6 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
     typeof event.capacity === "number" ? Math.max(event.capacity - stats.checkedIn, 0) : null;
   const totalCollected =
     typeof event.price_cents === "number" ? ((event.price_cents * stats.paidCount) / 100).toFixed(2) : null;
-  const { data: scannerRoles } = await supabase
-    .from("event_scanner_roles")
-    .select("scanner_email, status, created_at")
-    .eq("event_id", id)
-    .eq("status", "ACTIVE")
-    .is("revoked_at", null)
-    .order("created_at", { ascending: true });
-
   return (
     <main className="app-shell min-h-screen text-neutral-900 px-4 py-6">
       <AutoRefresh intervalMs={2000} />
@@ -116,47 +107,36 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
           </div>
           <DeleteEventForm eventId={event.id} />
           {query.saved ? <p className="mt-3 text-sm text-green-700">Event updated.</p> : null}
-          {query.scannerInvite === "sent" ? (
-            <p className="mt-2 text-sm text-green-700">Scanner invite email sent.</p>
-          ) : null}
-          {query.scannerInvite === "existing" ? (
-            <p className="mt-2 text-sm text-neutral-600">
-              Scanner role added. That email already has an account, so no new invite email was sent.
-            </p>
-          ) : null}
-          {query.scannerInvite === "failed" ? (
-            <p className="mt-2 text-sm text-red-600">
-              Scanner role added, but invite email failed. Check Supabase Auth email/SMTP settings.
-            </p>
-          ) : null}
+          {query.scannerCode === "rotated" ? <p className="mt-2 text-sm text-green-700">Scanner access code rotated.</p> : null}
           {query.error ? <p className="mt-3 text-sm text-red-600">{query.error}</p> : null}
         </section>
 
         <section className="glass-card fade-in rounded-2xl p-5">
-          <h2 className="text-base font-semibold">Scanner Roles</h2>
+          <h2 className="text-base font-semibold">Scanner Access</h2>
           {proAccess ? (
             <>
-              <form method="post" action={`/api/host/events/${event.id}/scanners`} className="mt-3 space-y-2">
-                <input
-                  name="scanner_email"
-                  type="email"
-                  required
-                  placeholder="Scanner email"
-                  className="input-field text-sm"
-                />
-                <button type="submit" className="primary-btn w-full py-2.5 text-sm font-medium">
-                  Invite Scanner
-                </button>
-              </form>
               <div className="mt-3 space-y-2">
-                <ScannerRolesManager eventId={event.id} roles={scannerRoles ?? []} />
+                <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-700">
+                  Scanner link: <span className="font-mono text-xs">{`/scan/${event.id}`}</span>
+                </p>
+                <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-700">
+                  Event code: <span className="font-semibold tracking-[0.2em]">{event.scanner_access_code ?? "------"}</span>
+                </p>
+                <p className="text-xs text-neutral-500">
+                  Share the scanner link and code with trusted door staff. They only get scan + headcount access for this event.
+                </p>
+                <form method="post" action={`/api/host/events/${event.id}/scanners`}>
+                  <button type="submit" className="secondary-btn w-full py-2.5 text-sm font-medium">
+                    Rotate Scanner Code
+                  </button>
+                </form>
               </div>
             </>
           ) : (
             <div className="mt-3 rounded-lg border border-neutral-200 bg-white/90 px-3 py-3">
               <p className="text-sm font-medium">Locked</p>
               <p className="mt-1 text-xs text-neutral-500">
-                Your main host account can always scan. Upgrade to Pro to invite additional scanner accounts.
+                Your main host account can always scan. Upgrade to Pro to unlock extra scanner access links and event codes.
               </p>
               <Link href="/host/settings" className="secondary-btn mt-2 inline-flex">
                 Upgrade in Settings

@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation";
-import { requireHost } from "@/lib/auth/requireHost";
-import { requireEventAccess } from "@/lib/auth/eventAccess";
+import { notFound, redirect } from "next/navigation";
+import { getCurrentHostUser } from "@/lib/auth/requireHost";
+import { getEventAccess } from "@/lib/auth/eventAccess";
+import { hasScannerSessionForEvent } from "@/lib/eventrl/scannerSession";
 import { hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import ScannerClient from "./ScannerClient";
@@ -10,26 +11,30 @@ type ScannerPageProps = {
 };
 
 export default async function HostScannerPage({ params }: ScannerPageProps) {
-  const hostUser = await requireHost();
   const { id } = await params;
-  const access = await requireEventAccess(id, hostUser).catch(() => null);
-  if (!access) {
-    notFound();
-  }
   const supabase = getSupabaseAdminClient();
+  const hostUser = await getCurrentHostUser();
+  const hostAccess = hostUser ? await getEventAccess(id, hostUser) : null;
+  const scannerSessionAllowed = hostAccess ? false : await hasScannerSessionForEvent(id);
+  if (!hostAccess && !scannerSessionAllowed) {
+    redirect(`/scan/${id}`);
+  }
 
-  const [{ data: event, error: eventError }, { data: ownerProfile }] = await Promise.all([
-    supabase
-      .from("events")
-      .select("id, host_user_id, name, capacity")
-      .eq("id", id)
-      .single(),
-    supabase.from("host_profiles").select("subscription_status").eq("user_id", access.ownerHostUserId).maybeSingle(),
-  ]);
+  const { data: event, error: eventError } = await supabase
+    .from("events")
+    .select("id, host_user_id, name, capacity")
+    .eq("id", id)
+    .single();
 
   if (eventError || !event) {
     notFound();
   }
+
+  const { data: ownerProfile } = await supabase
+    .from("host_profiles")
+    .select("subscription_status")
+    .eq("user_id", hostAccess ? hostAccess.ownerHostUserId : event.host_user_id)
+    .maybeSingle();
 
   const showLiveCounters = Boolean(ownerProfile && hasProAccess(ownerProfile));
   let checkedIn = 0;
@@ -56,7 +61,7 @@ export default async function HostScannerPage({ params }: ScannerPageProps) {
       initialCheckedIn={checkedIn}
       initialApproved={approved}
       initialRemainingCapacity={remainingCapacity}
-      isScannerRole={access.role === "SCANNER"}
+      isScannerRole={hostAccess ? hostAccess.role === "SCANNER" : true}
       showLiveCounters={showLiveCounters}
     />
   );

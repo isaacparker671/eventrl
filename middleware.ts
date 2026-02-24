@@ -49,8 +49,9 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isHostLoginRoute = request.nextUrl.pathname === "/host/login";
+  const isHostScannerRoute = /^\/host\/events\/[^/]+\/scanner$/.test(request.nextUrl.pathname);
   const isHostProtectedRoute =
-    request.nextUrl.pathname.startsWith("/host/") && !isHostLoginRoute;
+    request.nextUrl.pathname.startsWith("/host/") && !isHostLoginRoute && !isHostScannerRoute;
 
   if (isHostLoginRoute && user) {
     const url = request.nextUrl.clone();

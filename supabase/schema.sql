@@ -17,6 +17,7 @@ create table if not exists public.events (
   price_cents integer,
   interaction_mode text not null check (interaction_mode in ('RESTRICTED', 'OPEN_CHAT')),
   invite_slug text not null unique,
+  scanner_access_code text,
   created_at timestamptz not null default now(),
   constraint capacity_positive check (capacity is null or capacity > 0),
   constraint price_cents_positive check (price_cents is null or price_cents > 0)

@@ -16,6 +16,7 @@ alter table if exists public.events
   add column if not exists price_cents integer,
   add column if not exists interaction_mode text,
   add column if not exists invite_slug text,
+  add column if not exists scanner_access_code text,
   add column if not exists created_at timestamptz not null default now();
 
 update public.events
@@ -25,6 +26,10 @@ where invite_slug is null;
 update public.events
 set interaction_mode = 'RESTRICTED'
 where interaction_mode is null;
+
+update public.events
+set scanner_access_code = lpad((floor(random() * 1000000)::int)::text, 6, '0')
+where scanner_access_code is null;
 
 do $$
 begin

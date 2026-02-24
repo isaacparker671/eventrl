@@ -14,3 +14,8 @@ export function randomSlug(bytes = 16): string {
   return crypto.randomBytes(bytes).toString("base64url");
 }
 
+export function randomDigits(length = 6): string {
+  const min = 10 ** (length - 1);
+  const max = (10 ** length) - 1;
+  return crypto.randomInt(min, max + 1).toString();
+}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { requireEventAccess } from "@/lib/auth/eventAccess";
+import { hasScannerSessionForEvent } from "@/lib/eventrl/scannerSession";
 import { hasProAccess } from "@/lib/host/profile";
 import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -25,19 +26,21 @@ export async function POST(
   context: { params: Promise<{ eventId: string }> },
 ) {
   const hostUser = await getCurrentHostUser();
-  if (!hostUser) {
-    return jsonResult(401, "UNAUTHORIZED", "Host auth required.");
-  }
-
   const { eventId } = await context.params;
-  const accessRole = await requireEventAccess(eventId, hostUser).catch(() => null);
-  if (!accessRole) {
-    return jsonResult(403, "UNAUTHORIZED", "Not allowed for this event.");
+  const scannerSessionAllowed = !hostUser ? await hasScannerSessionForEvent(eventId) : false;
+
+  let accessRole: Awaited<ReturnType<typeof requireEventAccess>> | null = null;
+  if (hostUser) {
+    accessRole = await requireEventAccess(eventId, hostUser).catch(() => null);
+  }
+  if (!accessRole && !scannerSessionAllowed) {
+    return jsonResult(401, "UNAUTHORIZED", "Scanner authorization required.");
   }
 
   const ip = getClientIp(request);
+  const actorKey = accessRole ? `host:${hostUser?.id ?? "unknown"}` : `scanner-cookie:${eventId}`;
   const rate = checkRateLimit({
-    key: `checkin:${eventId}:${hostUser.id}:${ip}`,
+    key: `checkin:${eventId}:${actorKey}:${ip}`,
     limit: 180,
     windowMs: 60 * 1000,
   });
@@ -67,7 +70,7 @@ export async function POST(
   const { data: ownerProfile } = await supabase
     .from("host_profiles")
     .select("subscription_status")
-    .eq("user_id", accessRole.ownerHostUserId)
+    .eq("user_id", accessRole ? accessRole.ownerHostUserId : event.host_user_id)
     .maybeSingle();
   const showLiveCounters = Boolean(ownerProfile && hasProAccess(ownerProfile));
 
@@ -123,7 +126,7 @@ export async function POST(
   const primaryInsert = await supabase.from("checkins").insert({
     event_id: eventId,
     guest_access_id: access.id,
-    checker_host_user_id: hostUser.id,
+    checker_host_user_id: hostUser?.id ?? event.host_user_id,
   });
   insertError = primaryInsert.error;
 
@@ -132,7 +135,7 @@ export async function POST(
     const legacyInsert = await supabase.from("checkins").insert({
       event_id: eventId,
       guest_access_id: access.id,
-      host_user_id: hostUser.id,
+      host_user_id: hostUser?.id ?? event.host_user_id,
     });
     insertError = legacyInsert.error;
   }

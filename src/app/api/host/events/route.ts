@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
-import { randomSlug } from "@/lib/eventrl/security";
+import { randomDigits, randomSlug } from "@/lib/eventrl/security";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type InteractionMode = "RESTRICTED" | "OPEN_CHAT";
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
 
   let inviteSlug = "";
   let insertErrorMessage = "create_failed";
+  const scannerAccessCode = randomDigits(6);
   for (let i = 0; i < 5; i += 1) {
     inviteSlug = randomSlug(16);
     const { data, error } = await supabase
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
         invite_instructions: null,
         interaction_mode: interactionMode,
         invite_slug: inviteSlug,
+        scanner_access_code: scannerAccessCode,
       })
       .select("id")
       .single();

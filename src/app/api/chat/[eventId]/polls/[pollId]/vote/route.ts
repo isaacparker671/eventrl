@@ -43,12 +43,24 @@ export async function POST(
 
   const { data: existingVote } = await supabase
     .from("event_poll_votes")
-    .select("id")
+    .select("id, vote")
     .eq("poll_id", pollId)
     .eq("guest_request_id", actor.guestRequestId)
     .maybeSingle();
   if (existingVote) {
-    return NextResponse.json({ error: "You can only vote once." }, { status: 409 });
+    if (existingVote.vote === vote) {
+      const response = NextResponse.json({ ok: true, unchanged: true });
+      applyRateLimitHeaders(response, rate);
+      return response;
+    }
+    const { error: updateError } = await supabase
+      .from("event_poll_votes")
+      .update({ vote, created_at: new Date().toISOString() })
+      .eq("id", existingVote.id);
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+    const response = NextResponse.json({ ok: true, updated: true });
+    applyRateLimitHeaders(response, rate);
+    return response;
   }
 
   const { error } = await supabase.from("event_poll_votes").insert({
