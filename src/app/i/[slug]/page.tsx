@@ -163,28 +163,29 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
               </form>
             </div>
 
-            {scannerAccessEnabled ? (
-              <div className="rounded-xl border border-neutral-200 bg-white/90 p-3">
-                <p className="text-xs text-neutral-500">Door scanner access (staff only)</p>
-                <form method="post" action={`/api/scanner/access/${event.id}`} className="mt-2 flex gap-2">
-                  <input type="hidden" name="return_to" value={`/i/${slug}`} />
-                  <input
-                    name="access_code"
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    placeholder="6-digit code"
-                    required
-                    className="input-field flex-1 text-base"
-                  />
-                  <button type="submit" className="secondary-btn px-4 py-3 text-sm font-medium">
-                    Scan
-                  </button>
-                </form>
-              </div>
-            ) : null}
           </div>
         )}
+
+        {scannerAccessEnabled ? (
+          <div className="mt-4 rounded-xl border border-neutral-200 bg-white/90 p-3">
+            <p className="text-xs text-neutral-500">Door scanner access (staff only)</p>
+            <form method="post" action={`/api/scanner/access/${event.id}`} className="mt-2 flex gap-2">
+              <input type="hidden" name="return_to" value={`/i/${slug}`} />
+              <input
+                name="access_code"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                placeholder="Enter 6-digit scanner code"
+                required
+                className="input-field flex-1 text-base"
+              />
+              <button type="submit" className="secondary-btn px-4 py-3 text-sm font-medium">
+                Scan
+              </button>
+            </form>
+          </div>
+        ) : null}
 
         {errorMessage ? <p className="mt-3 text-sm text-red-600">{errorMessage}</p> : null}
 

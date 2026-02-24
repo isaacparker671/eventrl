@@ -143,9 +143,6 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
                   </button>
                 </form>
                 <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-700">
-                  Scanner link: <span className="font-mono text-xs">{`/scan/${event.id}`}</span>
-                </p>
-                <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-700">
                   Event code: <span className="font-semibold tracking-[0.2em]">{event.scanner_access_code ?? "------"}</span>
                 </p>
                 <p className="text-xs text-neutral-500">
