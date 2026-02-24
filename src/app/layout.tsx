@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Eventrl",
   description: "Private event access control platform.",
+  icons: {
+    icon: "/eventrl-logo.png",
+    shortcut: "/eventrl-logo.png",
+    apple: "/eventrl-logo.png",
+  },
 };
 
 export default function RootLayout({
