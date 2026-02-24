@@ -119,11 +119,23 @@ export async function POST(
     return jsonResult(403, "NOT_PAID", "Guest has not completed Stripe payment.");
   }
 
-  const { error: insertError } = await supabase.from("checkins").insert({
+  let insertError: { code?: string; message: string } | null = null;
+  const primaryInsert = await supabase.from("checkins").insert({
     event_id: eventId,
     guest_access_id: access.id,
     checker_host_user_id: hostUser.id,
   });
+  insertError = primaryInsert.error;
+
+  // Backward compatibility: older DBs may still have `host_user_id` and not `checker_host_user_id`.
+  if (insertError?.code === "42703") {
+    const legacyInsert = await supabase.from("checkins").insert({
+      event_id: eventId,
+      guest_access_id: access.id,
+      host_user_id: hostUser.id,
+    });
+    insertError = legacyInsert.error;
+  }
 
   let result: CheckinResult = "CHECKED_IN";
   let message = `Checked in: ${guestRequest.display_name}`;
