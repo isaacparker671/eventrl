@@ -39,14 +39,6 @@ export async function POST(request: Request) {
     const appUrl = getAppUrl(request);
     const stripeSecretKey = getEnvStrict("STRIPE_SECRET_KEY");
     const proPriceId = getEnvStrict("STRIPE_PRO_PRICE_ID");
-    const stripeSecretPrefix = process.env.STRIPE_SECRET_KEY?.slice(0, 8) ?? "missing";
-    console.info("[stripe-pro-checkout] route", {
-      route: "src/app/api/stripe/pro/checkout/route.ts POST",
-    });
-    console.info("[stripe-pro-checkout] env snapshot", {
-      stripeSecretPrefix,
-      stripeProPriceId: process.env.STRIPE_PRO_PRICE_ID ?? "missing",
-    });
     logProPriceOnce(proPriceId);
     const form = new URLSearchParams();
     form.set("mode", "subscription");
