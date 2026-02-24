@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuestMembershipForEvent } from "@/lib/eventrl/guestSession";
+import { hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import EventImageGallery from "@/components/event/EventImageGallery";
 
@@ -22,6 +23,7 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
       revoked_at,
       events!inner (
         id,
+        host_user_id,
         name,
         starts_at,
         location_text,
@@ -39,6 +41,12 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   }
   const event = Array.isArray(invite.events) ? invite.events[0] : invite.events;
   if (!event) notFound();
+  const { data: ownerProfile } = await supabase
+    .from("host_profiles")
+    .select("subscription_status")
+    .eq("user_id", event.host_user_id)
+    .maybeSingle();
+  const scannerAccessEnabled = Boolean(ownerProfile && hasProAccess(ownerProfile));
   const { data: eventImages } = await supabase
     .from("event_images")
     .select("id, public_url, is_cover")
@@ -55,6 +63,12 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
         ? "Could not submit request. Try again."
         : query.error === "invalid_code"
           ? "Invalid recovery code for this event."
+          : query.error === "scanner_invalid_code"
+            ? "Invalid scanner code."
+            : query.error === "scanner_code_not_configured"
+              ? "Scanner code is not configured for this event."
+              : query.error === "scanner_pro_required"
+                ? "Scanner access requires Pro for this event."
           : query.error === "missing_guest_cookie_secret"
             ? "Server configuration is missing guest cookie secret."
             : query.error
@@ -148,6 +162,27 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
                 </button>
               </form>
             </div>
+
+            {scannerAccessEnabled ? (
+              <div className="rounded-xl border border-neutral-200 bg-white/90 p-3">
+                <p className="text-xs text-neutral-500">Door scanner access (staff only)</p>
+                <form method="post" action={`/api/scanner/access/${event.id}`} className="mt-2 flex gap-2">
+                  <input type="hidden" name="return_to" value={`/i/${slug}`} />
+                  <input
+                    name="access_code"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    placeholder="6-digit code"
+                    required
+                    className="input-field flex-1 text-base"
+                  />
+                  <button type="submit" className="secondary-btn px-4 py-3 text-sm font-medium">
+                    Scan
+                  </button>
+                </form>
+              </div>
+            ) : null}
           </div>
         )}
 

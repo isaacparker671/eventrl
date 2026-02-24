@@ -128,8 +128,12 @@ export async function POST(
     .eq("id", eventId);
 
   if (error) {
+    const message =
+      error.code === "23505" && normalizedInviteSlug
+        ? "This custom invite link is already in use. Try a different one."
+        : error.message;
     return NextResponse.redirect(
-      new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(error.message)}`, request.url),
+      new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(message)}`, request.url),
       { status: 303 },
     );
   }
@@ -144,8 +148,12 @@ export async function POST(
       { onConflict: "event_id" },
     );
     if (inviteError) {
+      const message =
+        inviteError.code === "23505"
+          ? "This custom invite link is already in use. Try a different one."
+          : inviteError.message;
       return NextResponse.redirect(
-        new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(inviteError.message)}`, request.url),
+        new URL(`/host/events/${eventId}/edit?error=${encodeURIComponent(message)}`, request.url),
         { status: 303 },
       );
     }

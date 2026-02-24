@@ -7,10 +7,10 @@ type ScannerAccessPageProps = {
 };
 
 function getErrorMessage(error: string | undefined) {
-  if (error === "invalid_code") return "Invalid access code.";
+  if (error === "invalid_code" || error === "scanner_invalid_code") return "Invalid access code.";
   if (error === "too_many_attempts") return "Too many attempts. Try again in a moment.";
   if (error === "scanner_code_not_configured") return "Scanner access is not configured for this event yet.";
-  if (error === "pro_required") return "Scanner link access is a Pro feature for this event.";
+  if (error === "pro_required" || error === "scanner_pro_required") return "Scanner link access is a Pro feature for this event.";
   return null;
 }
 
