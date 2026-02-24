@@ -48,6 +48,7 @@ export async function getCurrentHostUser(): Promise<User | null> {
   } = await supabase.auth.getUser();
 
   if (error) {
+    console.error("[auth-failure] Supabase getUser failed.", { message: error.message });
     return null;
   }
 
@@ -64,9 +65,10 @@ export async function requireHost(
   }
 
   if (options.onUnauthenticated === "throw") {
+    console.warn("[auth-failure] Host authentication required (throw).");
     throw new Error("Host authentication required.");
   }
 
+  console.warn("[auth-failure] Host authentication required (redirect).");
   redirect(options.redirectTo ?? "/host/login");
 }
-

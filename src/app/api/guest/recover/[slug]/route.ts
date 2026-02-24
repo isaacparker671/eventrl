@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addGuestMembershipToResponse } from "@/lib/eventrl/guestSession";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(
@@ -7,6 +8,20 @@ export async function POST(
   context: { params: Promise<{ slug: string }> },
 ) {
   const { slug } = await context.params;
+  const ip = getClientIp(request);
+  const rate = checkRateLimit({
+    key: `guest:recover:${slug}:${ip}`,
+    limit: 10,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.redirect(new URL(`/i/${slug}?error=too_many_recovery_attempts`, request.url), {
+      status: 303,
+    });
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
+
   const formData = await request.formData();
   const recoveryCode = String(formData.get("recovery_code") ?? "").trim();
 
@@ -51,5 +66,6 @@ export async function POST(
     });
   }
 
+  applyRateLimitHeaders(response, rate);
   return response;
 }

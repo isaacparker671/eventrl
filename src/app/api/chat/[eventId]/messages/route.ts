@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getGuestContextFromCookie } from "@/lib/eventrl/guestSession";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Params = { params: Promise<{ eventId: string }> };
@@ -122,6 +123,18 @@ export async function POST(request: Request, context: Params) {
   if (!actor) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
+  const ip = getClientIp(request);
+  const actorKey = actor.type === "HOST" ? `host:${actor.hostUserId}` : `guest:${actor.guestRequestId}`;
+  const rate = checkRateLimit({
+    key: `chat:messages:post:${eventId}:${actorKey}:${ip}`,
+    limit: 45,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many messages. Slow down." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
 
   const payload = (await request.json().catch(() => null)) as
     | { body?: string; replyToMessageId?: string | null }
@@ -187,7 +200,9 @@ export async function POST(request: Request, context: Params) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+      const response = NextResponse.json({ ok: true });
+      applyRateLimitHeaders(response, rate);
+      return response;
   }
 
   const { data: hostProfile } = await supabase
@@ -209,7 +224,9 @@ export async function POST(request: Request, context: Params) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }
 
 export async function DELETE(request: Request, context: Params) {
@@ -217,6 +234,18 @@ export async function DELETE(request: Request, context: Params) {
   const actor = await resolveActorAccess(eventId, request.headers.get("x-eventrl-actor"));
   if (!actor) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+  const ip = getClientIp(request);
+  const actorKey = actor.type === "HOST" ? `host:${actor.hostUserId}` : `guest:${actor.guestRequestId}`;
+  const rate = checkRateLimit({
+    key: `chat:messages:delete:${eventId}:${actorKey}:${ip}`,
+    limit: 20,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many delete requests. Slow down." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
   }
 
   const payload = (await request.json().catch(() => null)) as { messageId?: string } | null;
@@ -243,5 +272,7 @@ export async function DELETE(request: Request, context: Params) {
     return NextResponse.json({ error: "Message not found or not allowed." }, { status: 404 });
   }
 
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }

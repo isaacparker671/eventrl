@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveChatActor } from "@/lib/eventrl/chatAuth";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(
@@ -10,6 +11,17 @@ export async function POST(
   const actor = await resolveChatActor(eventId, request.headers.get("x-eventrl-actor"));
   if (!actor || actor.type !== "GUEST") {
     return NextResponse.json({ error: "Guest only." }, { status: 403 });
+  }
+  const ip = getClientIp(request);
+  const rate = checkRateLimit({
+    key: `chat:poll-vote:${eventId}:${pollId}:guest:${actor.guestRequestId}:${ip}`,
+    limit: 20,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many vote attempts. Try again shortly." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
   }
 
   const payload = (await request.json().catch(() => null)) as { vote?: "YES" | "NO" } | null;
@@ -46,5 +58,7 @@ export async function POST(
     vote,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }

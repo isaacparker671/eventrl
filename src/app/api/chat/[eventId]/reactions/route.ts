@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveChatActor } from "@/lib/eventrl/chatAuth";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 type Reaction = "UP" | "DOWN" | "LAUGH";
@@ -16,6 +17,18 @@ export async function POST(
   const { eventId } = await context.params;
   const actor = await resolveChatActor(eventId, request.headers.get("x-eventrl-actor"));
   if (!actor) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const ip = getClientIp(request);
+  const actorKey = actor.type === "HOST" ? `host:${actor.hostUserId}` : `guest:${actor.guestRequestId}`;
+  const rate = checkRateLimit({
+    key: `chat:reactions:post:${eventId}:${actorKey}:${ip}`,
+    limit: 120,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many reactions. Slow down." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
 
   const payload = (await request.json().catch(() => null)) as
     | { messageId?: string; emoji?: string }
@@ -61,7 +74,9 @@ export async function POST(
         .delete()
         .eq("id", existingResult.data.id);
       if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
-      return NextResponse.json({ ok: true, action: "removed" });
+      const response = NextResponse.json({ ok: true, action: "removed" });
+      applyRateLimitHeaders(response, rate);
+      return response;
     }
 
     const { error: updateError } = await supabase
@@ -69,7 +84,9 @@ export async function POST(
       .update({ reaction })
       .eq("id", existingResult.data.id);
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
-    return NextResponse.json({ ok: true, action: "updated", reaction });
+    const response = NextResponse.json({ ok: true, action: "updated", reaction });
+    applyRateLimitHeaders(response, rate);
+    return response;
   }
 
   const { error } = await supabase.from("event_chat_reactions").insert(
@@ -89,5 +106,7 @@ export async function POST(
   );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, action: "added", reaction });
+  const response = NextResponse.json({ ok: true, action: "added", reaction });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }

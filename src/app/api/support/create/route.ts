@@ -9,8 +9,17 @@ type SupportPayload = {
   message?: unknown;
 };
 
+const NAME_MAX = 80;
+const EMAIL_MAX = 254;
+const MESSAGE_MIN = 10;
+const MESSAGE_MAX = 2000;
+
 function cleanString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export async function POST(request: Request) {
@@ -41,8 +50,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name, email, and message are required." }, { status: 400 });
   }
 
-  if (message.length > 5000) {
-    return NextResponse.json({ error: "Message is too long." }, { status: 400 });
+  if (name.length < 2 || name.length > NAME_MAX) {
+    return NextResponse.json({ error: "Name must be between 2 and 80 characters." }, { status: 400 });
+  }
+
+  if (email.length > EMAIL_MAX || !isValidEmail(email)) {
+    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
+
+  if (message.length < MESSAGE_MIN || message.length > MESSAGE_MAX) {
+    return NextResponse.json({ error: "Message must be between 10 and 2000 characters." }, { status: 400 });
   }
 
   const user = await getCurrentHostUser();

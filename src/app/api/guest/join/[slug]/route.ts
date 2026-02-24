@@ -8,6 +8,14 @@ function randomRecoveryCode() {
   return crypto.randomInt(10000, 100000).toString();
 }
 
+const DISPLAY_NAME_MIN = 2;
+const DISPLAY_NAME_MAX = 80;
+const EMAIL_MAX = 254;
+
+function isValidGuestEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ slug: string }> },
@@ -33,6 +41,12 @@ export async function POST(
   if (!displayName) {
     return NextResponse.redirect(new URL(`/i/${slug}?error=missing_name`, request.url), { status: 303 });
   }
+  if (displayName.length < DISPLAY_NAME_MIN || displayName.length > DISPLAY_NAME_MAX) {
+    return NextResponse.redirect(new URL(`/i/${slug}?error=invalid_name_length`, request.url), { status: 303 });
+  }
+  if (guestEmail && (guestEmail.length > EMAIL_MAX || !isValidGuestEmail(guestEmail))) {
+    return NextResponse.redirect(new URL(`/i/${slug}?error=invalid_email`, request.url), { status: 303 });
+  }
 
   const supabase = getSupabaseAdminClient();
   const { data: invite, error: eventError } = await supabase
@@ -44,7 +58,8 @@ export async function POST(
       events!inner (
         id,
         is_paid_event,
-        requires_payment
+        requires_payment,
+        allow_plus_one
       )
       `,
     )
@@ -60,6 +75,7 @@ export async function POST(
   }
   const isPaidEvent = Boolean(event.is_paid_event);
   const requiresPayment = Boolean(event.requires_payment);
+  const allowPlusOne = Boolean(event.allow_plus_one);
 
   let guestRequest: { id: string; recovery_code: string | null } | null = null;
   let requestErrorMessage = "join_failed";
@@ -72,7 +88,7 @@ export async function POST(
         display_name: displayName,
         guest_email: guestEmail || null,
         recovery_code: recoveryCode,
-        plus_one_requested: plusOneRequested,
+        plus_one_requested: allowPlusOne ? plusOneRequested : false,
         status: isPaidEvent ? "PENDING_PAYMENT" : "PENDING",
         payment_status: isPaidEvent || requiresPayment ? "PENDING" : "PAID",
       })

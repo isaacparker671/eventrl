@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveChatActor } from "@/lib/eventrl/chatAuth";
+import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(
@@ -33,10 +34,24 @@ export async function POST(
   if (!actor || actor.type !== "GUEST") {
     return NextResponse.json({ error: "Guest only." }, { status: 403 });
   }
+  const ip = getClientIp(request);
+  const rate = checkRateLimit({
+    key: `chat:questions:post:${eventId}:guest:${actor.guestRequestId}:${ip}`,
+    limit: 12,
+    windowMs: 60 * 1000,
+  });
+  if (!rate.allowed) {
+    const response = NextResponse.json({ error: "Too many question requests. Try again shortly." }, { status: 429 });
+    applyRateLimitHeaders(response, rate);
+    return response;
+  }
 
   const payload = (await request.json().catch(() => null)) as { body?: string } | null;
   const body = payload?.body?.trim() ?? "";
   if (!body) return NextResponse.json({ error: "Question required." }, { status: 400 });
+  if (body.length > 500) {
+    return NextResponse.json({ error: "Question is too long." }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdminClient();
   const { data: eventRow } = await supabase
@@ -55,5 +70,7 @@ export async function POST(
     status: "PENDING",
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  applyRateLimitHeaders(response, rate);
+  return response;
 }
