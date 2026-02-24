@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type AuthMode = "login" | "signup";
@@ -26,6 +26,32 @@ export default function HostLoginPage() {
     : mode === "login"
       ? "Sign in"
       : "Create account";
+
+  useEffect(() => {
+    let mounted = true;
+
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (mounted && data.session) {
+        window.location.replace("/host/dashboard");
+      }
+    };
+
+    void checkSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        window.location.replace("/host/dashboard");
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -77,7 +103,7 @@ export default function HostLoginPage() {
         }
 
         if (signInError.message.toLowerCase().includes("confirm")) {
-          setInfoMessage("Check your email and confirm your account, then log in.");
+          setInfoMessage("Check your email and confirm your account. You will be signed in automatically after verification.");
           return;
         }
 
