@@ -721,3 +721,333 @@ create unique index if not exists host_profiles_stripe_customer_id_uniq
 create unique index if not exists host_profiles_stripe_subscription_id_uniq
   on public.host_profiles(stripe_subscription_id)
   where stripe_subscription_id is not null;
+
+-- Row Level Security hardening (defense-in-depth)
+alter table if exists public.events enable row level security;
+alter table if exists public.event_scanner_roles enable row level security;
+alter table if exists public.invite_links enable row level security;
+alter table if exists public.guest_requests enable row level security;
+alter table if exists public.guest_access enable row level security;
+alter table if exists public.checkins enable row level security;
+alter table if exists public.guest_sessions enable row level security;
+alter table if exists public.event_chat_members enable row level security;
+alter table if exists public.event_chat_messages enable row level security;
+alter table if exists public.event_chat_reactions enable row level security;
+alter table if exists public.event_polls enable row level security;
+alter table if exists public.event_poll_votes enable row level security;
+alter table if exists public.event_question_requests enable row level security;
+alter table if exists public.host_profiles enable row level security;
+alter table if exists public.support_tickets enable row level security;
+alter table if exists public.stripe_events enable row level security;
+alter table if exists public.event_images enable row level security;
+
+drop policy if exists events_owner_all on public.events;
+create policy events_owner_all
+  on public.events
+  for all
+  to authenticated
+  using (host_user_id = auth.uid())
+  with check (host_user_id = auth.uid());
+
+drop policy if exists event_scanner_roles_owner_all on public.event_scanner_roles;
+create policy event_scanner_roles_owner_all
+  on public.event_scanner_roles
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_scanner_roles.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_scanner_roles.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists invite_links_owner_all on public.invite_links;
+create policy invite_links_owner_all
+  on public.invite_links
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = invite_links.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = invite_links.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists guest_requests_host_owner_all on public.guest_requests;
+create policy guest_requests_host_owner_all
+  on public.guest_requests
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = guest_requests.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = guest_requests.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists guest_access_host_owner_all on public.guest_access;
+create policy guest_access_host_owner_all
+  on public.guest_access
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = guest_access.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = guest_access.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists checkins_host_owner_all on public.checkins;
+create policy checkins_host_owner_all
+  on public.checkins
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = checkins.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = checkins.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists guest_sessions_host_owner_all on public.guest_sessions;
+create policy guest_sessions_host_owner_all
+  on public.guest_sessions
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.guest_requests gr
+      join public.events e on e.id = gr.event_id
+      where gr.id = guest_sessions.guest_request_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.guest_requests gr
+      join public.events e on e.id = gr.event_id
+      where gr.id = guest_sessions.guest_request_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_chat_members_host_owner_all on public.event_chat_members;
+create policy event_chat_members_host_owner_all
+  on public.event_chat_members
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_members.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_members.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_chat_messages_host_owner_all on public.event_chat_messages;
+create policy event_chat_messages_host_owner_all
+  on public.event_chat_messages
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_messages.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_messages.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_chat_reactions_host_owner_all on public.event_chat_reactions;
+create policy event_chat_reactions_host_owner_all
+  on public.event_chat_reactions
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_reactions.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_chat_reactions.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_polls_host_owner_all on public.event_polls;
+create policy event_polls_host_owner_all
+  on public.event_polls
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_polls.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_polls.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_poll_votes_host_owner_all on public.event_poll_votes;
+create policy event_poll_votes_host_owner_all
+  on public.event_poll_votes
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_poll_votes.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_poll_votes.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_question_requests_host_owner_all on public.event_question_requests;
+create policy event_question_requests_host_owner_all
+  on public.event_question_requests
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_question_requests.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_question_requests.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists host_profiles_self_all on public.host_profiles;
+create policy host_profiles_self_all
+  on public.host_profiles
+  for all
+  to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists support_tickets_self_select on public.support_tickets;
+create policy support_tickets_self_select
+  on public.support_tickets
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists event_images_host_owner_all on public.event_images;
+create policy event_images_host_owner_all
+  on public.event_images
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_images.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_images.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
