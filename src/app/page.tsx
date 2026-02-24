@@ -16,7 +16,7 @@ export default function Home() {
               href="/host/login"
               className="primary-btn inline-block w-full px-6 py-3 text-center text-sm font-medium active:scale-[0.98]"
             >
-              Host Login
+              Host Login / Sign up
             </a>
             <a
               href="/join"
