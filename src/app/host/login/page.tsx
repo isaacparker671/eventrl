@@ -28,29 +28,17 @@ export default function HostLoginPage() {
       : "Create account";
 
   useEffect(() => {
-    let mounted = true;
-
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (mounted && data.session) {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+      if (!error && user) {
         window.location.replace("/host/dashboard");
       }
     };
 
     void checkSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        window.location.replace("/host/dashboard");
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
   }, [supabase]);
 
   useEffect(() => {
@@ -112,7 +100,7 @@ export default function HostLoginPage() {
         }
 
         if (signInError.message.toLowerCase().includes("confirm")) {
-          setInfoMessage("Check your email, verify your account, then come back and sign in.");
+          setInfoMessage("Account created. Check your email to verify.");
           return;
         }
 

@@ -106,6 +106,62 @@ export default async function HostDashboardPage({ searchParams }: DashboardProps
         </div>
 
         <section className="glass-card fade-in rounded-2xl p-5">
+          {proAccess ? (
+            <div className="mb-4 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+                <p className="text-xs text-neutral-500">Total collected</p>
+                <p className="text-sm font-semibold text-orange-700">${(totalCollectedAllEventsCents / 100).toFixed(2)}</p>
+              </div>
+              <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+                <p className="text-xs text-neutral-500">Paid guests</p>
+                <p className="text-sm font-semibold text-orange-700">{totalPaidGuestsAllEvents}</p>
+              </div>
+              <div className="col-span-2 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+                <p className="text-xs text-neutral-500">Last 30 days</p>
+                <p className="text-sm font-semibold text-orange-700">${(totalCollected30DayCents / 100).toFixed(2)}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+              <p className="text-xs font-medium text-neutral-700">Pro feature locked</p>
+              <p className="mt-1 text-xs text-neutral-500">
+                Upgrade to Pro to unlock live check-in counters and revenue dashboard totals.
+              </p>
+            </div>
+          )}
+          <h2 className="text-base font-semibold">Your Events</h2>
+          <div className="mt-3 space-y-3">
+            {events?.length ? (
+              events.map((event) => (
+                <Link
+                  key={event.id}
+                  href={`/host/events/${event.id}`}
+                  className="block rounded-xl border border-neutral-200 px-3 py-3 hover:border-orange-200 hover:bg-orange-50/40 transition-colors"
+                >
+                  <p className="text-sm font-medium">{event.name}</p>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {new Date(event.starts_at).toLocaleString()} · {event.location_text}
+                  </p>
+                  {proAccess ? (
+                    <p className="mt-1 text-xs text-neutral-600">
+                      Checked-in: {checkedInByEvent.get(event.id) ?? 0}
+                    </p>
+                  ) : null}
+                  {proAccess ? (
+                    <p className="mt-1 text-xs text-orange-700">
+                      Event revenue: ${((paidStatsByEvent.get(event.id)?.totalCollectedCents ?? 0) / 100).toFixed(2)}
+                      {event.is_paid_event ? ` · Paid guests: ${paidStatsByEvent.get(event.id)?.paidCount ?? 0}` : ""}
+                    </p>
+                  ) : null}
+                </Link>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-500">No events yet.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="glass-card fade-in rounded-2xl p-5">
           <h2 className="text-base font-semibold">Create Event</h2>
           <form method="post" action="/api/host/events" className="mt-4 space-y-3">
             <input
@@ -188,62 +244,6 @@ export default async function HostDashboardPage({ searchParams }: DashboardProps
               Create Event
             </button>
           </form>
-        </section>
-
-        <section className="glass-card fade-in rounded-2xl p-5">
-          {proAccess ? (
-            <div className="mb-4 grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
-                <p className="text-xs text-neutral-500">Total collected</p>
-                <p className="text-sm font-semibold text-orange-700">${(totalCollectedAllEventsCents / 100).toFixed(2)}</p>
-              </div>
-              <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
-                <p className="text-xs text-neutral-500">Paid guests</p>
-                <p className="text-sm font-semibold text-orange-700">{totalPaidGuestsAllEvents}</p>
-              </div>
-              <div className="col-span-2 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
-                <p className="text-xs text-neutral-500">Last 30 days</p>
-                <p className="text-sm font-semibold text-orange-700">${(totalCollected30DayCents / 100).toFixed(2)}</p>
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4 rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
-              <p className="text-xs font-medium text-neutral-700">Pro feature locked</p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Upgrade to Pro to unlock live check-in counters and revenue dashboard totals.
-              </p>
-            </div>
-          )}
-          <h2 className="text-base font-semibold">Your Events</h2>
-          <div className="mt-3 space-y-3">
-            {events?.length ? (
-              events.map((event) => (
-                <Link
-                  key={event.id}
-                  href={`/host/events/${event.id}`}
-                  className="block rounded-xl border border-neutral-200 px-3 py-3 hover:border-orange-200 hover:bg-orange-50/40 transition-colors"
-                >
-                  <p className="text-sm font-medium">{event.name}</p>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    {new Date(event.starts_at).toLocaleString()} · {event.location_text}
-                  </p>
-                  {proAccess ? (
-                    <p className="mt-1 text-xs text-neutral-600">
-                      Checked-in: {checkedInByEvent.get(event.id) ?? 0}
-                    </p>
-                  ) : null}
-                  {proAccess ? (
-                    <p className="mt-1 text-xs text-orange-700">
-                      Event revenue: ${((paidStatsByEvent.get(event.id)?.totalCollectedCents ?? 0) / 100).toFixed(2)}
-                      {event.is_paid_event ? ` · Paid guests: ${paidStatsByEvent.get(event.id)?.paidCount ?? 0}` : ""}
-                    </p>
-                  ) : null}
-                </Link>
-              ))
-            ) : (
-              <p className="text-sm text-neutral-500">No events yet.</p>
-            )}
-          </div>
         </section>
       </div>
     </main>
