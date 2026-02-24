@@ -28,12 +28,6 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
         <p className="mt-1 text-sm text-neutral-600">
           Need help? Send us a message and we will get back to you.
         </p>
-        <p className="mt-2 text-sm text-neutral-700">
-          Support email:{" "}
-          <a className="text-orange-700 underline-offset-2 hover:underline" href="mailto:support@eventrl.com">
-            support@eventrl.com
-          </a>
-        </p>
         <SupportForm />
       </div>
     </main>

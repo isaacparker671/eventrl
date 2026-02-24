@@ -41,7 +41,12 @@ export default function HostLoginPage() {
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({ email: normalizedEmail, password });
+        const emailRedirectTo = `${window.location.origin}/auth/callback?next=/host/dashboard`;
+        const { data, error } = await supabase.auth.signUp({
+          email: normalizedEmail,
+          password,
+          options: { emailRedirectTo },
+        });
 
         if (error) {
           const msg = error.message.toLowerCase();
