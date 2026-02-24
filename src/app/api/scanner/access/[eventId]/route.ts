@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { hasProAccess } from "@/lib/host/profile";
-import { setScannerSessionInResponse } from "@/lib/eventrl/scannerSession";
+import {
+  clearScannerGateInResponse,
+  getScannerGateFromCookie,
+  setScannerGateInResponse,
+  setScannerSessionInResponse,
+} from "@/lib/eventrl/scannerSession";
 import { sha256Hex } from "@/lib/eventrl/security";
 import { applyRateLimitHeaders, checkRateLimit, getClientIp } from "@/lib/security/rateLimit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -18,6 +23,66 @@ export async function POST(
   context: { params: Promise<{ eventId: string }> },
 ) {
   const { eventId } = await context.params;
+  const formData = await request.formData();
+  const action = String(formData.get("action") ?? "verify");
+  const scannerName = String(formData.get("scanner_name") ?? "").trim();
+
+  if (action === "activate") {
+    const scannerGate = await getScannerGateFromCookie();
+    if (!scannerGate || scannerGate.eventId !== eventId) {
+      return NextResponse.redirect(new URL(`/scan/${eventId}?error=invalid_code`, request.url), { status: 303 });
+    }
+
+    if (scannerName.length < 2 || scannerName.length > 40) {
+      return NextResponse.redirect(new URL(`/scan/${eventId}?error=invalid_scanner_name&stage=identity`, request.url), {
+        status: 303,
+      });
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data: event } = await supabase
+      .from("events")
+      .select("id, host_user_id")
+      .eq("id", eventId)
+      .maybeSingle();
+    if (!event) {
+      return NextResponse.redirect(new URL(`/scan/${eventId}?error=event_not_found`, request.url), { status: 303 });
+    }
+
+    const { data: ownerProfile } = await supabase
+      .from("host_profiles")
+      .select("subscription_status")
+      .eq("user_id", event.host_user_id)
+      .maybeSingle();
+    if (!ownerProfile || !hasProAccess(ownerProfile)) {
+      return NextResponse.redirect(new URL(`/scan/${eventId}?error=scanner_pro_required`, request.url), { status: 303 });
+    }
+
+    const { error: upsertError } = await supabase.from("event_scanner_identities").upsert(
+      {
+        event_id: eventId,
+        scanner_name: scannerName,
+        last_used_at: new Date().toISOString(),
+      },
+      { onConflict: "event_id,scanner_name" },
+    );
+    if (upsertError) {
+      return NextResponse.redirect(
+        new URL(`/scan/${eventId}?error=${encodeURIComponent(upsertError.message)}&stage=identity`, request.url),
+        { status: 303 },
+      );
+    }
+
+    const response = NextResponse.redirect(new URL(`/host/events/${eventId}/scanner`, request.url), { status: 303 });
+    await setScannerSessionInResponse(response, {
+      eventId,
+      scannerName,
+      grantedAt: new Date().toISOString(),
+    });
+    await clearScannerGateInResponse(response);
+    return response;
+  }
+
   const ip = getClientIp(request);
   const rate = checkRateLimit({
     key: `scanner:access:${eventId}:${ip}`,
@@ -32,7 +97,6 @@ export async function POST(
     return response;
   }
 
-  const formData = await request.formData();
   const code = String(formData.get("access_code") ?? "").trim();
   const returnTo = safeReturnTo(formData.get("return_to"));
   const redirectPath = (error: string) =>
@@ -85,10 +149,10 @@ export async function POST(
     return response;
   }
 
-  const response = NextResponse.redirect(new URL(`/host/events/${eventId}/scanner`, request.url), { status: 303 });
-  await setScannerSessionInResponse(response, {
+  const response = NextResponse.redirect(new URL(`/scan/${eventId}?stage=identity`, request.url), { status: 303 });
+  await setScannerGateInResponse(response, {
     eventId,
-    grantedAt: new Date().toISOString(),
+    verifiedAt: new Date().toISOString(),
   });
   applyRateLimitHeaders(response, rate);
   return response;

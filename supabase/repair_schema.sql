@@ -127,6 +127,25 @@ create unique index if not exists event_scanner_roles_event_email_uniq
 create index if not exists event_scanner_roles_scanner_email_idx
   on public.event_scanner_roles(scanner_email, status);
 
+create table if not exists public.event_scanner_identities (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references public.events(id) on delete cascade,
+  scanner_name text not null,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz not null default now()
+);
+
+alter table if exists public.event_scanner_identities
+  add column if not exists event_id uuid references public.events(id) on delete cascade,
+  add column if not exists scanner_name text,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists last_used_at timestamptz not null default now();
+
+create unique index if not exists event_scanner_identities_event_name_uniq
+  on public.event_scanner_identities(event_id, scanner_name);
+create index if not exists event_scanner_identities_event_used_idx
+  on public.event_scanner_identities(event_id, last_used_at desc);
+
 create table if not exists public.invite_links (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null unique references public.events(id) on delete cascade,
@@ -730,6 +749,7 @@ create unique index if not exists host_profiles_stripe_subscription_id_uniq
 -- Row Level Security hardening (defense-in-depth)
 alter table if exists public.events enable row level security;
 alter table if exists public.event_scanner_roles enable row level security;
+alter table if exists public.event_scanner_identities enable row level security;
 alter table if exists public.invite_links enable row level security;
 alter table if exists public.guest_requests enable row level security;
 alter table if exists public.guest_access enable row level security;
@@ -794,6 +814,28 @@ create policy invite_links_owner_all
       select 1
       from public.events e
       where e.id = invite_links.event_id
+        and e.host_user_id = auth.uid()
+    )
+  );
+
+drop policy if exists event_scanner_identities_owner_all on public.event_scanner_identities;
+create policy event_scanner_identities_owner_all
+  on public.event_scanner_identities
+  for all
+  to authenticated
+  using (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_scanner_identities.event_id
+        and e.host_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1
+      from public.events e
+      where e.id = event_scanner_identities.event_id
         and e.host_user_id = auth.uid()
     )
   );

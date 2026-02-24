@@ -9,7 +9,7 @@ import DeleteEventForm from "./DeleteEventForm";
 
 type EventPageProps = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; scannerCode?: string; scannerInvite?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; scannerCode?: string }>;
 };
 
 export default async function HostEventPage({ params, searchParams }: EventPageProps) {
@@ -33,13 +33,20 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
     notFound();
   }
 
-  const [{ data: guests }, { count: checkedInCount }] = await Promise.all([
+  const [{ data: guests }, { count: checkedInCount }, { data: scanners }] = await Promise.all([
     supabase
       .from("guest_requests")
       .select("id, display_name, guest_email, status, payment_status, guest_event_status, payment_confirmed_at, created_at")
       .eq("event_id", id)
       .order("created_at", { ascending: true }),
     supabase.from("checkins").select("id", { count: "exact", head: true }).eq("event_id", id),
+    supabase
+      .from("event_scanner_identities")
+      .select("id, scanner_name, last_used_at")
+      .eq("event_id", id)
+      .order("last_used_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(24),
   ]);
 
   const stats = {
@@ -108,19 +115,6 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
           <DeleteEventForm eventId={event.id} />
           {query.saved ? <p className="mt-3 text-sm text-green-700">Event updated.</p> : null}
           {query.scannerCode === "rotated" ? <p className="mt-2 text-sm text-green-700">Scanner access code rotated.</p> : null}
-          {query.scannerInvite === "sent" ? (
-            <p className="mt-2 text-sm text-green-700">Scanner invite email sent.</p>
-          ) : null}
-          {query.scannerInvite === "existing" ? (
-            <p className="mt-2 text-sm text-neutral-600">
-              Scanner role is active. That email already has an account, so no new invite email was sent.
-            </p>
-          ) : null}
-          {query.scannerInvite === "failed" ? (
-            <p className="mt-2 text-sm text-red-600">
-              Scanner role added, but invite email failed. Check Supabase Auth email/SMTP settings.
-            </p>
-          ) : null}
           {query.error ? <p className="mt-3 text-sm text-red-600">{query.error}</p> : null}
         </section>
 
@@ -129,25 +123,26 @@ export default async function HostEventPage({ params, searchParams }: EventPageP
           {proAccess ? (
             <>
               <div className="mt-3 space-y-2">
-                <form method="post" action={`/api/host/events/${event.id}/scanners`} className="space-y-2">
-                  <input type="hidden" name="action" value="invite" />
-                  <input
-                    name="scanner_email"
-                    type="email"
-                    required
-                    placeholder="Scanner email"
-                    className="input-field text-sm"
-                  />
-                  <button type="submit" className="primary-btn w-full py-2.5 text-sm font-medium">
-                    Invite Scanner
-                  </button>
-                </form>
                 <p className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2 text-sm text-neutral-700">
                   Event code: <span className="font-semibold tracking-[0.2em]">{event.scanner_access_code ?? "------"}</span>
                 </p>
                 <p className="text-xs text-neutral-500">
-                  Invited scanners open the email link, then enter the event code. They only get scan + headcount access for this event.
+                  Share the event invite link. Scanner staff enter this event code, choose their name, and only get scan + headcount access.
                 </p>
+                <div className="rounded-lg border border-neutral-200 bg-white/90 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Scanners for this event</p>
+                  {scanners?.length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {scanners.map((scanner) => (
+                        <span key={scanner.id} className="rounded-full border border-neutral-200 px-2 py-1 text-xs text-neutral-700">
+                          {scanner.scanner_name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-neutral-500">No scanners have joined yet.</p>
+                  )}
+                </div>
                 <form method="post" action={`/api/host/events/${event.id}/scanners`}>
                   <input type="hidden" name="action" value="rotate_code" />
                   <button type="submit" className="secondary-btn w-full py-2.5 text-sm font-medium">
