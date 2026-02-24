@@ -2,6 +2,20 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  const hasAuthCallbackParams =
+    request.nextUrl.searchParams.has("code") ||
+    (request.nextUrl.searchParams.has("token_hash") &&
+      request.nextUrl.searchParams.has("type"));
+
+  if (hasAuthCallbackParams && request.nextUrl.pathname !== "/auth/callback") {
+    const callbackUrl = request.nextUrl.clone();
+    callbackUrl.pathname = "/auth/callback";
+    if (!callbackUrl.searchParams.has("next")) {
+      callbackUrl.searchParams.set("next", "/host/dashboard");
+    }
+    return NextResponse.redirect(callbackUrl);
+  }
+
   let response = NextResponse.next({
     request,
   });
@@ -56,5 +70,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/host", "/host/:path*"],
+  matcher: ["/", "/host", "/host/:path*"],
 };
