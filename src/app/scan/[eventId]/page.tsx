@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   getScannerGateFromCookie,
   getScannerSessionFromCookie,
@@ -58,6 +59,14 @@ export default async function ScannerAccessPage({ params, searchParams }: Scanne
       <div className="glass-card mx-auto w-full max-w-md rounded-2xl p-5">
         <h1 className="text-xl font-semibold tracking-tight">Scanner Access</h1>
         <p className="mt-1 text-sm text-neutral-600">{event.name}</p>
+        {hasSessionForEvent ? (
+          <Link
+            href={`/host/events/${event.id}/scanner`}
+            className="primary-btn mt-3 block w-full py-3 text-center text-sm font-medium"
+          >
+            Continue as {scannerSession?.scannerName ?? "Scanner"}
+          </Link>
+        ) : null}
         {canChooseIdentity ? (
           <div className="mt-4 space-y-3">
             <p className="text-sm text-neutral-600">Enter your scanner name, or pick one below.</p>
