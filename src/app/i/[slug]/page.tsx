@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuestMembershipForEvent } from "@/lib/eventrl/guestSession";
-import { hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import EventImageGallery from "@/components/event/EventImageGallery";
 
@@ -41,12 +40,6 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
   }
   const event = Array.isArray(invite.events) ? invite.events[0] : invite.events;
   if (!event) notFound();
-  const { data: ownerProfile } = await supabase
-    .from("host_profiles")
-    .select("subscription_status")
-    .eq("user_id", event.host_user_id)
-    .maybeSingle();
-  const scannerAccessEnabled = Boolean(ownerProfile && hasProAccess(ownerProfile));
   const { data: eventImages } = await supabase
     .from("event_images")
     .select("id, public_url, is_cover")
@@ -166,26 +159,24 @@ export default async function InvitePage({ params, searchParams }: InvitePagePro
           </div>
         )}
 
-        {scannerAccessEnabled ? (
-          <div className="mt-4 rounded-xl border border-neutral-200 bg-white/90 p-3">
-            <p className="text-xs text-neutral-500">Door scanner access (staff only)</p>
-            <form method="post" action={`/api/scanner/access/${event.id}`} className="mt-2 flex gap-2">
-              <input type="hidden" name="return_to" value={`/i/${slug}`} />
-              <input
-                name="access_code"
-                inputMode="numeric"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                placeholder="Enter 6-digit scanner code"
-                required
-                className="input-field flex-1 text-base"
-              />
-              <button type="submit" className="secondary-btn px-4 py-3 text-sm font-medium">
-                Scan
-              </button>
-            </form>
-          </div>
-        ) : null}
+        <div className="mt-4 rounded-xl border border-neutral-200 bg-white/90 p-3">
+          <p className="text-xs text-neutral-500">Door scanner access (staff only)</p>
+          <form method="post" action={`/api/scanner/access/${event.id}`} className="mt-2 flex gap-2">
+            <input type="hidden" name="return_to" value={`/i/${slug}`} />
+            <input
+              name="access_code"
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              placeholder="Enter 6-digit scanner code"
+              required
+              className="input-field flex-1 text-base"
+            />
+            <button type="submit" className="secondary-btn px-4 py-3 text-sm font-medium">
+              Scan
+            </button>
+          </form>
+        </div>
 
         {errorMessage ? <p className="mt-3 text-sm text-red-600">{errorMessage}</p> : null}
 

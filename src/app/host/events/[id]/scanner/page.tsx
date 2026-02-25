@@ -61,7 +61,7 @@ export default async function HostScannerPage({ params }: ScannerPageProps) {
       initialCheckedIn={checkedIn}
       initialApproved={approved}
       initialRemainingCapacity={remainingCapacity}
-      isScannerRole={hostAccess ? hostAccess.role === "SCANNER" : true}
+      isScannerRole={!hostAccess}
       showLiveCounters={showLiveCounters}
     />
   );

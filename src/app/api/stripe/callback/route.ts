@@ -1,19 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentHostUser } from "@/lib/auth/requireHost";
 import { getScannerOnlyRedirect } from "@/lib/auth/eventAccess";
+import { getEnvStrict } from "@/lib/env";
 import { ensureHostProfile, hasProAccess } from "@/lib/host/profile";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
-function getRequiredEnv(name: "STRIPE_CONNECT_CLIENT_ID" | "STRIPE_SECRET_KEY") {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing environment variable: ${name}`);
-  }
-  return value;
-}
-
 function getAppUrl(request: Request) {
-  return new URL(request.url).origin.replace(/\/$/, "");
+  return (process.env.APP_URL || new URL(request.url).origin).replace(/\/$/, "");
 }
 
 export async function GET(request: Request) {
@@ -50,8 +43,8 @@ export async function GET(request: Request) {
     }
 
     const appUrl = getAppUrl(request);
-    const clientId = getRequiredEnv("STRIPE_CONNECT_CLIENT_ID");
-    const stripeSecretKey = getRequiredEnv("STRIPE_SECRET_KEY");
+    const clientId = getEnvStrict("STRIPE_CONNECT_CLIENT_ID");
+    const stripeSecretKey = getEnvStrict("STRIPE_SECRET_KEY");
     const redirectUri = `${appUrl}/api/stripe/callback`;
 
     const form = new URLSearchParams();
