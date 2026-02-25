@@ -165,6 +165,7 @@ alter table if exists public.invite_links
 insert into public.invite_links (event_id, created_by_host_user_id, slug)
 select e.id, e.host_user_id, e.invite_slug
 from public.events e
+join auth.users u on u.id = e.host_user_id
 where e.invite_slug is not null
   and e.host_user_id is not null
   and not exists (
