@@ -51,7 +51,7 @@ export async function POST(
 
     const { data: ownerProfile } = await supabase
       .from("host_profiles")
-      .select("subscription_status")
+      .select("subscription_status, is_pro")
       .eq("user_id", event.host_user_id)
       .maybeSingle();
     if (!ownerProfile || !hasProAccess(ownerProfile)) {
@@ -128,7 +128,7 @@ export async function POST(
 
   const { data: ownerProfile } = await supabase
     .from("host_profiles")
-    .select("subscription_status")
+    .select("subscription_status, is_pro")
     .eq("user_id", event.host_user_id)
     .maybeSingle();
   if (!ownerProfile || !hasProAccess(ownerProfile)) {

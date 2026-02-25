@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
   let inviteSlug = "";
   let insertErrorMessage = "create_failed";
-  const scannerAccessCode = randomDigits(6);
+  const scannerAccessCode = proAccess ? randomDigits(6) : null;
   for (let i = 0; i < 5; i += 1) {
     inviteSlug = randomSlug(16);
     const { data, error } = await supabase
