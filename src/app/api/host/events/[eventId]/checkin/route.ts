@@ -27,7 +27,7 @@ export async function POST(
 ) {
   const hostUser = await getCurrentHostUser();
   const { eventId } = await context.params;
-  const scannerSessionAllowed = !hostUser ? await hasScannerSessionForEvent(eventId) : false;
+  const scannerSessionAllowed = await hasScannerSessionForEvent(eventId);
 
   let accessRole: Awaited<ReturnType<typeof requireEventAccess>> | null = null;
   if (hostUser) {
@@ -69,7 +69,7 @@ export async function POST(
   }
   const { data: ownerProfile } = await supabase
     .from("host_profiles")
-    .select("subscription_status")
+    .select("subscription_status, is_pro")
     .eq("user_id", accessRole ? accessRole.ownerHostUserId : event.host_user_id)
     .maybeSingle();
   const showLiveCounters = Boolean(ownerProfile && hasProAccess(ownerProfile));

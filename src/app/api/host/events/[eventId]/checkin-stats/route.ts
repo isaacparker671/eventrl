@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const hostUser = await getCurrentHostUser();
   const { eventId } = await context.params;
-  const scannerSessionAllowed = !hostUser ? await hasScannerSessionForEvent(eventId) : false;
+  const scannerSessionAllowed = await hasScannerSessionForEvent(eventId);
   let access: Awaited<ReturnType<typeof requireEventAccess>> | null = null;
   if (hostUser) {
     access = await requireEventAccess(eventId, hostUser).catch(() => null);
@@ -32,7 +32,7 @@ export async function GET(
   }
   const { data: ownerProfile } = await supabase
     .from("host_profiles")
-    .select("subscription_status")
+    .select("subscription_status, is_pro")
     .eq("user_id", access ? access.ownerHostUserId : event.host_user_id)
     .maybeSingle();
   if (!ownerProfile || !hasProAccess(ownerProfile)) {
